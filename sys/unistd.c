@@ -1,0 +1,26 @@
+#include "unistd.h"
+#include "syscall.h"
+
+void _exit(short code) {
+  sysc_exit(code);
+}
+
+ssize_t read(int fd, void *buf, size_t count) {
+  if (fd == STDIN_FILENO) {
+    sysc_gets(count, (char *)buf);
+    return count;
+  } else {
+    sysc_read(fd, count, buf);
+  }
+  return count;
+}
+
+ssize_t write(int fd, const void *buf, size_t count) {
+  if (fd == STDOUT_FILENO) {
+    sysc_puts(count, (char *)buf);
+    return count;
+  } else {
+    sysc_write(fd, count, buf);
+  }
+  return count;
+}
