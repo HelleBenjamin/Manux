@@ -28,26 +28,9 @@ KERNEL_SP EQU KERNEL_WORKSPACE+2
 USER_SP EQU KERNEL_WORKSPACE+4
 SYSCALL_COUNT EQU KERNEL_WORKSPACE+6
 KERNEL_FLAGS EQU KERNEL_WORKSPACE+8
-PROCESS_COUNT EQU KERNEL_WORKSPACE+10
-MAX_PROCESS_COUNT EQU 5
-CURRENT_PROCESS EQU KERNEL_WORKSPACE+14
-PROCESS_LIST EQU KERNEL_WORKSPACE+54 ; Reserve space for process list
-
-; Process offsets
-PROC_RETLO EQU 0 ; Return address
-PROC_RETHI EQU 1
-PROC_STATE EQU 2
-PROC_ID EQU 3
-PROC_EXIT_CODE EQU 4
-PROC_PARENT EQU 5 ; Parent process
-PROC_ADDR_LO EQU 6 ; Where the process code starts
-PROC_ADDR_HI EQU 7
-
-; Process states
-STATE_STOPPED EQU 0
-STATE_RUNNING EQU 1
-STATE_ERROR EQU 2
-STATE_EXITED EQU 3
+; Main process table
+PROC_RET EQU KERNEL_WORKSPACE + 10 ; Return address
+PROC_ADDR EQU KERNEL_WORKSPACE + 12 ; Where the process code starts
 
 KERNEL_STACK EQU $AF00
 USER_STACK EQU $A500
@@ -97,7 +80,7 @@ KERNEL_ENTRY:
   LD (HL), D ; Now the syscall address is at 0xB000
 
   ; Set syscall count
-  LD A, $0A
+  LD A, $08
   LD (SYSCALL_COUNT), A
 
   ; Load kernel flags
@@ -106,34 +89,28 @@ KERNEL_ENTRY:
   SET 0, (HL) ; Set echo
   RES 1, (HL) ; Set kernel mode(0)
 
-  ; Set process count
-  LD HL, PROCESS_COUNT
-  LD (HL), 0
-
-  ; Set max process count
-  LD HL, MAX_PROCESS_COUNT
-  LD (HL), 5 ; Maximum of 5 processes
 
   ; Create OS stack at 0xA500
   LD SP, USER_STACK
   LD (USER_SP), SP
   LD SP, (KERNEL_SP)
 
-  CALL CREATE_ROOT_PROCESS
+  SWITCH_TO_USER
+
+  ; Initialize BSS
+  CALL crt0_init_bss
+
+  ; Create OS process
+  LD HL, _OS_ENTRY
+  LD A, 5
+  CALL $B000
+
+  SWITCH_TO_KERNEL
 
   POP HL ; Restore old sp
   LD SP, HL
   RET ; Return back to BASIC
 
-ROOT_PROCESS:
-  SWITCH_TO_USER
-  CALL crt0_init_bss
-
-  LD HL, _OS_ENTRY
-  LD A, 0x05
-  CALL $B000 ; Create process
-  SWITCH_TO_KERNEL
-  RET
 
 
 ; Important! System calls must be called from user mode
@@ -188,13 +165,6 @@ ROOT_PROCESS:
 ;   BC - sleep time
 ;   Description: Sleep for BC ms
 ;
-; 0x09 - SYS_GETPID
-;   HL - pointer to buffer
-;   Description: Get current process id
-;
-; 0x0A - SYS_FORK
-;   none
-;   Description: Create a new process from the current process
 
 
 SYSCALL_DISPATCH:
@@ -259,7 +229,6 @@ ECHO_CHAR:
 
 SYS_EXIT:
   CALL EXIT_PROCESS
-
 
 SYS_WRITE:
   L_0: ; Main loop
@@ -346,7 +315,7 @@ SYS_PUTS:
 
 SYS_EXEC:
   CALL CREATE_PROCESS
-
+  EX DE, HL
   JP (HL) ; Then jump to the entrypoint
 
 SYS_GETINFO:
@@ -364,230 +333,30 @@ SYS_RAND:
 SYS_SLEEP:
   JP SYSCALL_END
 
-SYS_GETPID:
-  LD A, (CURRENT_PROCESS)
-  LD (HL), A
-  JP SYSCALL_END
-
-SYS_FORK:
-  ; Create new process cloned from current process
-  CALL FIND_FREE_PROCESS_SLOT
-  CP 1
-  JP Z, SYSCALL_END ; If no free process slot, return
-
-  LD (HL), E
-  INC HL
-  LD (HL), D ; Now the process return address is saved in the process table
-
-  INC A
-  LD (PROCESS_COUNT), A
-
-  INC HL
-  LD A, STATE_RUNNING
-  LD (HL), A ; Now the process state is set to running
-
-  LD A, R ; Get new unique pid
-  INC HL
-  LD (HL), A ; Now the process pid is saved in the process table
-
-  ADD HL, 2
-  LD A, (CURRENT_PROCESS)
-  LD (HL), A ; Now the parent pid is saved
-
-  LD (CURRENT_PROCESS), A ; Set current process
-
-  JP SYSCALL_END
-
-FIND_FREE_PROCESS_SLOT:
-  LD HL, PROCESS_LIST ; Get the base
-  LD A, (MAX_PROCESS_COUNT)
-  LD C, A
-  LOOP_F:
-    DEC C
-    JR Z, END_F
-    LD A, (HL)
-    CP STATE_EXITED
-    JZ FOUND_FREE_PROCESS
-    ADD HL, 8
-    JR LOOP_F
-  FOUND_FREE_PROCESS:
-    LD A, 0 ; Success
-    RET ; HL = free process slot
-  END_F:
-    LD A, 1 ; Failure
-    RET
-
-FIND_PROCESS: ; Find a process, B = pid, HL = return address
-  LD HL, PROCESS_LIST ; Get the base
-  LD A, (MAX_PROCESS_COUNT)
-  LD C, A
-  LOOP_P:
-    DEC C
-    JR Z, END_P
-    ADD HL, PROC_ID
-    LD A, (HL)
-    CP B
-    JR Z, FOUND_PROCESS
-    ADD HL, 8
-    JR LOOP_P
-  FOUND_PROCESS:
-    LD A, 0 ; Success
-    RET ; HL = process slot
-  END_P:
-    LD A, 1 ; Failure
-    RET
 
 CREATE_PROCESS:
   PUSH HL ; Save entrypoint
-  CALL FIND_FREE_PROCESS_SLOT
-  CP 1
-  JP Z, CREATE_PROCESS_END_FAIL ; If no free process slot, return
-  PUSH HL ; Save process slot
+  
+  LD HL, (USER_SP) ; Get the return address
+  LD (PROC_RET), HL
 
-  LD HL, (USER_SP) ; Get the return address from user stack
-  LD E, (HL) ; Get low byte
-  INC HL
-  LD D, (HL) ; Get high byte
-  ; Now the process return address is in DE
-
-  POP HL
+  LD HL, PROC_ADDR
+  POP DE
   LD (HL), E
   INC HL
-  LD (HL), D ; Now the process return address is saved in the process table
+  LD (HL), D ; Entrypoint in the process table
+  
+  RET
 
-  LD A, (PROCESS_COUNT)
-  INC A
-  LD (PROCESS_COUNT), A ; Increment process count
 
-  INC HL
-  LD A, STATE_RUNNING
-  LD (HL), A ; Now the process state is set to running
-
-  LD A, R ; Get new unique pid
-  INC HL
-  LD (HL), A ; Now the process pid is saved in the process table
-
-  ADD HL, 2
-  LD A, (CURRENT_PROCESS)
-  LD (HL), A ; Now the parent pid is saved
-
-  LD (CURRENT_PROCESS), A ; Set current process
-
-  POP BC
-  INC HL
-  LD (HL), C
-  INC HL
-  LD (HL), B ; Now the process entrypoint is saved in the process table
-
-  PUSH BC
-  POP HL ; HL = entrypoint
-
-  CREATE_PROCESS_END_SUCCESS:
-    LD A, 0 ; Success
-    RET
-
-  CREATE_PROCESS_END_FAIL:
-    LD A, 1 ; Failure
-    ADD SP, 2 ; Stack cleanup
-    RET
-
-CREATE_ROOT_PROCESS:
-  CALL FIND_FREE_PROCESS_SLOT
-  CP 1
-  JP Z, CREATE_ROOT_PROCESS_END_FAIL ; If no free process slot, return
-  PUSH HL ; Save process slot
-
-  LD HL, 4 ; Get the return address
-  ADD HL, SP
-  LD E, (HL) ; Get low byte
-  INC HL
-  LD D, (HL) ; Get high byte
-  ; Now the process return address is in DE
-
-  POP HL
-  LD (HL), E
-  INC HL
-  LD (HL), D ; Now the process return address is saved in the process table
-
-  LD A, (PROCESS_COUNT)
-  INC A
-  LD (PROCESS_COUNT), A ; Increment process count
-
-  INC HL
-  LD A, STATE_RUNNING
-  LD (HL), A ; Now the process state is set to running
-
-  LD A, 0 ; Set root pid
-  INC HL
-  LD (HL), A ; Now the process pid is saved in the process table
-
-  ADD HL, 2
-  LD A, (CURRENT_PROCESS)
-  LD (HL), A ; Now the parent pid is saved
-
-  LD (CURRENT_PROCESS), A ; Set current process
-
-  LD BC, ROOT_PROCESS
-  INC HL
-  LD (HL), C
-  INC HL
-  LD (HL), B ; Now the root entrypoint is saved in the process table
-
-  PUSH BC
-  POP HL ; HL = entrypoint
-
-  CREATE_ROOT_PROCESS_END_SUCCESS:
-    JP ROOT_PROCESS
-    RET
-
-  CREATE_ROOT_PROCESS_END_FAIL:
-    LD A, 1 ; Failure
-    ADD SP, 2 ; Stack cleanup
-    RET
-
-EXIT_PROCESS: ; Exit current process
-  LD A, (CURRENT_PROCESS)
-  CALL FIND_PROCESS ; Get current process
-
+EXIT_PROCESS:
+  LD HL, PROC_RET
   LD E, (HL)
   INC HL
-  LD D, (HL) ; Get the return address
+  LD D, (HL)
+  PUSH DE
+  RET ; Return to the caller
 
-  INC HL
-  LD A, STATE_EXITED
-  LD (HL), A ; Now the process state is set to exited
-  INC HL
-  LD A, (HL) ; Get parent pid
-
-  CALL SET_CURRENT_PROCESS_BY_PID
-
-  SWITCH_TO_USER
-
-  PUSH DE 
-  RET ; Return to the parent
-
-SET_CURRENT_PROCESS_BY_PID: ; Set current process by pid, B = pid
-  PUSH AF
-  PUSH BC
-  LD A, (CURRENT_PROCESS)
-  LD B, A
-  CALL FIND_PROCESS ; Get current process
-
-  ADD HL, 3
-  LD A, STATE_STOPPED
-  LD (HL), A ; Now the process state is set to stopped
-
-  POP BC
-  CALL FIND_PROCESS
-  CP 0
-  JR Z, SET_CURRENT_PROCESS_BY_PID_END
-
-  LD A, B
-  LD (CURRENT_PROCESS), A
-
-  SET_CURRENT_PROCESS_BY_PID_END:
-    POP AF
-    RET
 
 ; Import from drivers
 
@@ -606,12 +375,9 @@ SYSCALL_TABLE:
   dw SYS_GETINFO
   dw SYS_RAND
   dw SYS_SLEEP
-  dw SYS_GETPID
-  dw SYS_FORK
 
 SYSINFO:
   db "Manux    Z80-PC   0.1      alpha    Z80     ", 0
 
 MSG:
   db "Hello from the kernel", 0DH, 0AH, 0
-
