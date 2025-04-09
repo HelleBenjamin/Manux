@@ -22,14 +22,32 @@ SECTION CODE
 ; | 0x0000 | BASIC ROM
 ; ----------
 
-KERNEL_WORKSPACE EQU $AFA0
+KERNEL_WORKSPACE EQU $B000
 
-KERNEL_SP EQU KERNEL_WORKSPACE+2
-USER_SP EQU KERNEL_WORKSPACE+4
-SYSCALL_COUNT EQU KERNEL_WORKSPACE+6
-KERNEL_FLAGS EQU KERNEL_WORKSPACE+8
+KERNEL_SP EQU KERNEL_WORKSPACE-2
+USER_SP EQU KERNEL_WORKSPACE-4
+SYSCALL_COUNT EQU KERNEL_WORKSPACE-6
+KERNEL_FLAGS EQU KERNEL_WORKSPACE-8
+PROCESS_COUNT EQU KERNEL_WORKSPACE-10
+MAX_PROCESS_COUNT EQU KERNEL_WORKSPACE-12
+CURRENT_PROCESS EQU KERNEL_WORKSPACE-14
+PROCESS_LIST EQU KERNEL_WORKSPACE-44 ; Reserve space for process list
 
-KERNEL_STACK EQU KERNEL_WORKSPACE-2
+; Process offsets
+PROC_RETLO EQU 0
+PROC_RETHI EQU 1
+PROC_STATE EQU 2
+PROC_ID EQU 3
+PROC_EXIT_CODE EQU 4
+PROC_PARENT EQU 5
+
+; Process states
+STATE_STOPPED EQU 0
+STATE_RUNNING EQU 1
+STATE_ERROR EQU 2
+STATE_EXITED EQU 3
+
+KERNEL_STACK EQU $AF00
 USER_STACK EQU $A500
 
   ; Kernel flags
@@ -86,6 +104,14 @@ KERNEL_ENTRY:
   SET 0, (HL) ; Set echo
   RES 1, (HL) ; Set kernel mode(0)
 
+  ; Set process count
+  LD HL, PROCESS_COUNT
+  LD (HL), 0
+
+  ; Set max process count
+  LD HL, MAX_PROCESS_COUNT
+  LD (HL), 5 ; Maximum 5 processes
+
   ; Create OS stack at 0xA500
   LD SP, USER_STACK
   LD (USER_SP), SP
@@ -95,7 +121,9 @@ KERNEL_ENTRY:
 
   CALL crt0_init_bss
 
-  CALL _OS_ENTRY ; Call the os
+  LD HL, _OS_ENTRY
+  LD A, 0x05
+  CALL $B000 ; Create process
 
   SWITCH_TO_KERNEL
 
@@ -155,6 +183,14 @@ KERNEL_ENTRY:
 ; 0x08 - SYS_SLEEP
 ;   BC - sleep time
 ;   Description: Sleep for BC ms
+;
+; 0x09 - SYS_GETPID
+;   HL - pointer to buffer
+;   Description: Get current process id
+;
+; 0x0A - SYS_FORK
+;   none
+;   Description: Create a new process from the current process
 
 
 SYSCALL_DISPATCH:
@@ -218,45 +254,71 @@ ECHO_CHAR:
   RET
 
 SYS_EXIT:
-  JP 0x0153 ; Exit to BASIC, warm start
+  LD A, (CURRENT_PROCESS) ; Get current process
+  SLA A
+  SLA A ; Multiply by 2
+  LD HL, PROCESS_TABLE
+  ADD A, L
+  LD L, A ; HL = process table address
+
+  LD E, (HL)
+  INC HL
+  LD D, (HL) ; Get the return address
+
+
+  ADD HL, PROC_STATE
+  LD (HL), STATE_EXITED ; Set process state to exited
+
+  SWITCH_TO_USER
+
+  PUSH DE
+  RET ; Return to the process caller
+
 
 SYS_WRITE:
   L_0: ; Main loop
-    LD A, (HL)
-    OUT (C), A
-    INC HL
     XOR A
     CP D
     JR Z, L_1 ; While D > 0, decrement D
     DEC E
     JR Z, L_2 ; Loop ends when length = 0
+    L_0_1:
+    LD A, (HL)
+    OUT (C), A
+    INC HL
     JR L_0
   L_1: ; Dec D
     DEC D
-    JR L_0
+    JR L_0_1
   L_2: ; End loop
     JP SYSCALL_END
 
 SYS_READ:
   L_3: ; Main loop
-    IN A, (C)
-    LD (HL), A
-    INC HL
     XOR A
     CP D
     JR Z, L_4 ; While D > 0, decrement D
     DEC E
     JR Z, L_5 ; Loop ends when length = 0
+    L_3_1:
+    IN A, (C)
+    LD (HL), A
+    INC HL
     JR L_3
   L_4: ; Dec D
     DEC D
-    JR L_3
+    JR L_3_1
   L_5: ; End loop
     JP SYSCALL_END
 
 SYS_GETS:
-  DEC DE
   L_6: ; Main loop
+    XOR A
+    CP D
+    JR Z, L_7 ; While D > 0, decrement D
+    DEC E
+    JR Z, L_8 ; Loop ends when length = 0
+    L_6_1:
     CALL READC
     CALL ECHO_CHAR
     CP 0x0D ; Check for enter
@@ -265,15 +327,10 @@ SYS_GETS:
     INC HL
     CP 0x08
     JR Z, L_7_1 ; If backspace, handle it
-    XOR A
-    CP D
-    JR Z, L_7 ; While D > 0, decrement D
-    DEC E
-    JR Z, L_8 ; Loop ends when length = 0
     JR L_6
   L_7: ; Dec D
     DEC D
-    JR L_6
+    JR L_6_1
   L_7_1: ; Handle backspace
     DEC HL
     CALL PRINTC
@@ -285,28 +342,58 @@ SYS_GETS:
 
 SYS_PUTS:
   L_9: ; Main loop
-    LD A, (HL)
-    CALL PRINTC
-    INC HL
     XOR A
     CP D
     JR Z, L_10 ; While D > 0, decrement D
     DEC E
     JR Z, L_11 ; Loop ends when length = 0
+    L_9_1:
+    LD A, (HL)
+    CALL PRINTC
+    INC HL
     JR L_9
   L_10: ; Dec D
     DEC D
-    JR L_9
+    JR L_9_1
   L_11: ; End loop
     JP SYSCALL_END
 
 SYS_EXEC:
-  CALL L_12 ; Save current PC
-  L_12:
-    POP DE
-    PUSH DE ; Save return address
-    JP (HL) ; Then jump to address
-    RET
+  PUSH HL
+
+  LD HL, (USER_SP) ; Get the return address from user stack
+  LD E, (HL) ; Get low byte
+  INC HL
+  LD D, (HL) ; Get high byte
+  ; Now the process return address is in DE
+
+  CALL FIND_FREE_PROCESS_SLOT ; Find a free process slot
+  CP 1
+  JR Z, FREE_SLOT1
+  ADD SP, 2
+  JR Z, SYSCALL_END ; If no free process slot, return
+
+  FREE_SLOT1:
+
+  LD (HL), E
+  INC HL
+  LD (HL), D ; Now the process return address is saved in the process table
+
+  INC A
+  LD (PROCESS_COUNT), A
+
+  INC HL
+  LD A, STATE_RUNNING
+  LD (HL), A ; Now the process state is set to running
+
+  LD A, R ; Get new unique pid
+  INC HL
+  LD (HL), A ; Now the process pid is saved in the process table
+  LD (CURRENT_PROCESS), A ; Set current process
+
+  POP HL
+
+  JP (HL) ; Then jump to address
 
 SYS_GETINFO:
   EX DE, HL
@@ -320,6 +407,79 @@ SYS_RAND:
   LD (HL), A
   JP SYSCALL_END
 
+SYS_GETPID:
+  LD A, (CURRENT_PROCESS)
+  LD (HL), A
+  JP SYSCALL_END
+
+SYS_FORK:
+  ; Create new process cloned from current process
+  CALL FIND_FREE_PROCESS_SLOT
+  CP 1
+  JR Z, SYSCALL_END ; If no free process slot, return
+
+  LD (HL), E
+  INC HL
+  LD (HL), D ; Now the process return address is saved in the process table
+
+  INC A
+  LD (PROCESS_COUNT), A
+
+  INC HL
+  LD A, STATE_RUNNING
+  LD (HL), A ; Now the process state is set to running
+
+  LD A, R ; Get new unique pid
+  INC HL
+  LD (HL), A ; Now the process pid is saved in the process table
+
+  ADD HL, 2
+  LD A, (CURRENT_PROCESS)
+  LD (HL), A ; Now the parent pid is saved
+
+  LD (CURRENT_PROCESS), A ; Set current process
+
+  JP SYSCALL_END
+
+FIND_FREE_PROCESS_SLOT:
+  LD HL, PROCESS_TABLE ; Get the base
+  XOR A
+  LD C, MAX_PROCESS_COUNT
+  LOOP_F:
+    DEC C
+    JR Z, END_F
+    ADD HL, PROC_STATE_SIZE
+    LD A, (HL)
+    CP STATE_EXITED
+    JZ FOUND_FREE_PROCESS
+    ADD HL, 2
+    JR LOOP_F
+  FOUND_FREE_PROCESS:
+    LD A, 0 ; Success
+    RET ; HL = free process slot
+  END_F:
+    LD A, 1 ; Failure
+    RET
+
+FIND_PROCESS: ; Find a process, B = pid, HL = return address
+  LD HL, PROCESS_TABLE ; Get the base
+  XOR A
+  LD C, MAX_PROCESS_COUNT
+  LOOP_P:
+    DEC C
+    JR Z, END_P
+    ADD HL, PROC_ID
+    LD A, (HL)
+    CP B
+    JR Z, FOUND_PROCESS
+    ADD HL, 2
+    JR LOOP_P
+  FOUND_PROCESS:
+    LD A, 0 ; Success
+    RET ; HL = process slot
+  END_P:
+    LD A, 1 ; Failure
+    RET
 
   ; Import from drivers
 

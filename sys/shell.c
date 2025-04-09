@@ -22,24 +22,16 @@ unsigned char hextobyte(char *hex) {
   return byte;
 }
 
-void z80asm() {
-  // Very small Z80 program loader
+void z80ld() {
+  // Very small Z80 program loader, loads hex code to 0xF000
   char *program = (char *)0xF000;
-  unsigned char ins[2] = {0};
-
-  while (1) {
-    read(STDIN_FILENO, ins, 2);
-    if (strcmp(ins, "00") == 0) {
-      write(STDOUT_FILENO, "Executing program\n\r", 20);
-      break; // Execute program
-    }
-    *program = hextobyte(ins);
-    program++;
-    write(STDOUT_FILENO, "\n\r", 2);
+  char pg[0xFF] = {0};
+  read(STDIN_FILENO, &pg, 0xFF);
+  for (short i = 0; i < 0xFF; i++) {
+    program[i] = hextobyte(&pg[i * 2]);
   }
-
+  write(STDOUT_FILENO, "\n\r", 2);
   asm("call 0xF000");
-  
 }
 
 void terminal() {
@@ -62,8 +54,11 @@ void terminal() {
       write(STDOUT_FILENO, utsname.version, 8);
       write(STDOUT_FILENO, utsname.machine, 8);
       write(STDOUT_FILENO, "\n\r", 2);
-    } else if (strcmp(command, "z80asm") == 0) {
-      z80asm();
+    } else if (strcmp(command, "z80ld") == 0) {
+      z80ld();
+    } else if (strcmp(command, "clear") == 0) {
+      char clear = 0x0C;
+      write(STDOUT_FILENO, &clear , 1);
     }
   }
   
