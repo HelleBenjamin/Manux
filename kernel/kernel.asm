@@ -22,15 +22,38 @@ SECTION CODE
 ; | 0x0000 | BASIC ROM
 ; ----------
 
-KERNEL_WORKSPACE EQU $B000
+KERNEL_WORKSPACE EQU $AF00
 
 KERNEL_SP EQU KERNEL_WORKSPACE+2
 USER_SP EQU KERNEL_WORKSPACE+4
 SYSCALL_COUNT EQU KERNEL_WORKSPACE+6
 KERNEL_FLAGS EQU KERNEL_WORKSPACE+8
-; Main process table
-PROC_RET EQU KERNEL_WORKSPACE + 10 ; Return address
-PROC_ADDR EQU KERNEL_WORKSPACE + 12 ; Where the process code starts
+
+; Root process table
+ROOT_PROC_RET EQU KERNEL_WORKSPACE + 10 ; Return address
+ROOT_PROC_ADDR EQU KERNEL_WORKSPACE + 12 ; Where the process code starts
+ROOT_PROC_ID EQU KERNEL_WORKSPACE + 14
+
+; General processes
+MAX_PROCS EQU 5 ; Maximum number of processes
+CURRENT_PROC EQU KERNEL_WORKSPACE + 16
+PROC_LIST EQU KERNEL_WORKSPACE + 56
+
+; Process offsets
+PROC_RET EQU 0 ; Return address
+PROC_STATE EQU 2
+PROC_ID EQU 3
+PROC_EXIT_CODE EQU 4
+PROC_PARENT EQU 5 ; Parent process
+PROC_ADDR EQU 7 ; Where the process code starts
+; = 8 bytes for each process, total of 40 bytes
+
+; Process states
+STATE_STOPPED EQU 0 ; Stopped, can be resumed
+STATE_RUNNING EQU 1 ; Currently running
+STATE_ERROR EQU 2 ; Exited with error
+STATE_EXITED EQU 3 ; Exited, slot free for a new process
+
 
 KERNEL_STACK EQU $AF00
 USER_STACK EQU $A500
@@ -97,12 +120,8 @@ KERNEL_ENTRY:
 
   SWITCH_TO_USER
 
-  ; Initialize BSS
-  CALL crt0_init_bss
-
-  ; Create OS process
-  LD HL, _OS_ENTRY
-  LD A, 5
+  ; Create root process
+  LD A, 0x09
   CALL $B000
 
   SWITCH_TO_KERNEL
@@ -111,7 +130,24 @@ KERNEL_ENTRY:
   LD SP, HL
   RET ; Return back to BASIC
 
+ROOT_PROCESS:
+  ; Initialize BSS
+  CALL crt0_init_bss
 
+  LD HL, MSG
+  LD DE, 9
+  LD A, 4
+  CALL $B000
+
+  ; Create OS process
+  LD HL, _OS_ENTRY
+  LD A, 5
+  CALL $B000
+
+  ; Exit
+  LD BC, 0
+  LD A, 0
+  CALL $B000
 
 ; Important! System calls must be called from user mode
 ; System Call Argument registers:
@@ -165,7 +201,12 @@ KERNEL_ENTRY:
 ;   BC - sleep time
 ;   Description: Sleep for BC ms
 ;
-
+; 0x09 - SYS_INITROOT
+;   Description: Initialize root process
+;
+; 0x0A - SYS_GETPID
+;   HL - pointer to buffer
+;   Description: Get current process ID
 
 SYSCALL_DISPATCH:
 
@@ -314,8 +355,9 @@ SYS_PUTS:
     JP SYSCALL_END
 
 SYS_EXEC:
+  PUSH HL
   CALL CREATE_PROCESS
-  EX DE, HL
+  POP HL
   JP (HL) ; Then jump to the entrypoint
 
 SYS_GETINFO:
@@ -326,7 +368,7 @@ SYS_GETINFO:
   JP SYSCALL_END
 
 SYS_RAND:
-  LD A, R ; Get the random number from refresh register
+  LD A, R ; Get the random number from the refresh register
   LD (HL), A
   JP SYSCALL_END
 
@@ -334,23 +376,173 @@ SYS_SLEEP:
   JP SYSCALL_END
 
 
-CREATE_PROCESS:
+SYS_INITROOT:
   PUSH HL ; Save entrypoint
   
   LD HL, (USER_SP) ; Get the return address
-  LD (PROC_RET), HL
+  LD (ROOT_PROC_RET), HL
 
-  LD HL, PROC_ADDR
+  LD HL, ROOT_PROC_ADDR
   POP DE
   LD (HL), E
   INC HL
   LD (HL), D ; Entrypoint in the process table
+
+  XOR A
+  LD (ROOT_PROC_ID), A ; Set root PID to 0
+
+  LD A, 0
+  LD (CURRENT_PROC), A ; Set current process to root
+
+  LD C, MAX_PROCS
+  LD HL, PROC_LIST
+  LD A, STATE_EXITED
+  INIT_PROC_LOOP: ; Initialize all processes
+    DEC C
+    JR Z, INIT_PROC_LOOP_END
+    ADD HL, 2
+    LD (HL), A ; Set state to exited
+    ADD HL, 6
+    JR INIT_PROC_LOOP
+  
+  INIT_PROC_LOOP_END:
   
   RET
 
+FIND_FREE_PROCESS_SLOT:
+  LD HL, PROC_LIST ; Get the base
+  LD C, MAX_PROCS
+  LOOP_F:
+    DEC C
+    JR Z, END_F
+    LD A, (HL)
+    CP STATE_EXITED
+    JZ FOUND_FREE_PROCESS
+    ADD HL, 8
+    JR LOOP_F
+  FOUND_FREE_PROCESS:
+    LD A, 0 ; Success
+    RET ; HL = free process slot
+  END_F:
+    LD A, 1 ; Failure
+    RET
+
+FIND_PROCESS: ; Find a process, B = pid, HL = return address
+  LD HL, PROC_LIST ; Get the base
+  LD C, MAX_PROCS
+  LOOP_P:
+    DEC C
+    JR Z, END_P
+    ADD HL, PROC_ID
+    LD A, (HL)
+    CP B
+    JR Z, FOUND_PROCESS
+    ADD HL, 8
+    JR LOOP_P
+  FOUND_PROCESS:
+    LD A, 0 ; Success
+    RET ; HL = process slot
+  END_P:
+    LD A, 1 ; Failure
+    RET
+
+SET_CURRENT_PROCESS_BY_PID: ; Set current process by pid, B = pid
+  PUSH AF
+  PUSH BC
+  LD A, (CURRENT_PROC)
+  LD B, A
+  CALL FIND_PROCESS ; Get current process
+
+  ADD HL, 3
+  LD A, STATE_STOPPED
+  LD (HL), A ; Now the process state is set to stopped
+
+  POP BC
+  CALL FIND_PROCESS
+  CP 0
+  JR Z, SET_CURRENT_PROCESS_BY_PID_END
+
+  LD A, B
+  LD (CURRENT_PROC), A
+
+  SET_CURRENT_PROCESS_BY_PID_END:
+    POP AF
+    RET
+
+CREATE_PROCESS:
+  PUSH HL ; Save entrypoint
+  CALL FIND_FREE_PROCESS_SLOT
+  CP 1
+  JR Z, CREATE_PROCESS_FAILED ; If the process table is full, return failure
+  PUSH HL ; Save process slot
+
+  LD HL, (USER_SP) ; Get the return address
+  LD E, (HL)
+  INC HL
+  LD D, (HL) ; Process return address in DE
+
+  POP HL ; Load process slot to HL
+  LD (HL), E
+  INC HL
+  LD (HL), D ; Return address in the process table
+
+  INC HL
+  LD A, STATE_RUNNING
+  LD (HL), A ; Now the process state is set to running
+
+  INC HL
+
+  LD A, R
+  LD (HL), A ; Set the random number to PID
+
+  INC HL
+  LD A, (CURRENT_PROC)
+  LD (HL), A ; Set the parent PID
+
+  POP DE
+  INC HL
+  LD (HL), E
+  INC HL
+  LD (HL), D ; Entrypoint in the process table
+
+  CREATE_PROCESS_SUCCESS:
+    LD A, 0
+    RET
+  CREATE_PROCESS_FAILED:
+    LD A, 1
+    ADD SP, 2
+    RET
+  
 
 EXIT_PROCESS:
-  LD HL, PROC_RET
+  LD A, (CURRENT_PROC)
+  CP 0
+  JR Z, EXIT_ROOT ; Check if root process
+
+  LD A, (CURRENT_PROC)
+  LD B, A
+  CALL FIND_PROCESS ; Get current process, HL = process slot
+
+  LD E, (HL)
+  INC HL
+  LD D, (HL) ; The return address is in DE
+
+  INC HL
+  LD A, STATE_EXITED
+  LD (HL), A ; Now the process state is set to exited
+  INC HL
+  INC HL
+  LD B, (HL) ; Get the parent PID
+
+  CALL SET_CURRENT_PROCESS_BY_PID ; Set the current process to the parent
+
+  SWITCH_TO_USER
+
+  PUSH DE
+  RET ; Return to the parent
+
+EXIT_ROOT:
+  LD HL, ROOT_PROC_RET
   LD E, (HL)
   INC HL
   LD D, (HL)
@@ -375,9 +567,10 @@ SYSCALL_TABLE:
   dw SYS_GETINFO
   dw SYS_RAND
   dw SYS_SLEEP
+  dw SYS_INITROOT
 
 SYSINFO:
   db "Manux    Z80-PC   0.1      alpha    Z80     ", 0
 
 MSG:
-  db "Hello from the kernel", 0DH, 0AH, 0
+  db "Hellord", 0DH, 0AH, 0
