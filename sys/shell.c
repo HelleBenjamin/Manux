@@ -31,7 +31,9 @@ void z80ld() {
     program[i] = hextobyte(&pg[i * 2]);
   }
   write(STDOUT_FILENO, "\n\r", 2);
-  asm("call 0xF000");
+  asm("ld hl, 0xF000\n");
+  asm("ld a, 5\n");
+  asm("call $B000\n");
 }
 
 void terminal() {

@@ -84,7 +84,7 @@ KERNEL_ENTRY:
   LD (HL), D ; Now the syscall address is at 0xB000
 
   ; Set syscall count
-  LD A, $08
+  LD A, $09
   LD (SYSCALL_COUNT), A
 
   ; Load kernel flags
@@ -107,9 +107,12 @@ KERNEL_ENTRY:
   CALL crt0_init_bss
 
   ; Create root process
+  LD A, 9
+  CALL $B000 ; Fork
+
   LD HL, ROOT_PROCESS
   LD A, 5
-  CALL $B000
+  CALL $B000 ; Exec
 
   SWITCH_TO_KERNEL
 
@@ -120,9 +123,14 @@ KERNEL_ENTRY:
 ROOT_PROCESS:
 
   ; Create OS process
+
+  LD A, 9
+  CALL $B000 ; Fork
+
   LD HL, _OS_ENTRY
   LD A, 5
-  CALL $B000
+  CALL $B000 ; And execute
+
 
   ; Exit
   LD BC, 0
@@ -182,18 +190,18 @@ ROOT_PROCESS:
 ;   Description: Sleep for BC ms
 ;
 ; 0x09 - SYS_FORK
-;   HL - pointer to buffer
-;   Description: Create a new process
+;   Description: Clone current process to new process
+
 SYSCALL_DISPATCH:
 
   SWITCH_TO_KERNEL
 
   ; Check if syscall is valid. We always want to check if something is valid with a jump table.
-  PUSH HL
-  LD HL, SYSCALL_COUNT
-  CP (HL)
-  POP HL
-  JP NC, SYSCALL_END
+  ;PUSH HL
+  ;LD HL, SYSCALL_COUNT
+  ;CP (HL)
+  ;POP HL
+  ;JP C, SYSCALL_END
 
   ; Save all registers, syscalls may alter them
   PUSH AF
@@ -331,11 +339,9 @@ SYS_PUTS:
   L_11: ; End loop
     JP SYSCALL_END
 
-SYS_EXEC:
-  PUSH HL
-  CALL CREATE_PROCESS
-  POP HL
-  JP (HL) ; Then jump to the entrypoint
+SYS_EXEC: ; Executes the program at the address in HL
+  SWITCH_TO_USER
+  JP (HL)
 
 SYS_GETINFO:
   EX DE, HL
@@ -352,6 +358,9 @@ SYS_RAND:
 SYS_SLEEP:
   JP SYSCALL_END
 
+SYS_FORK: ; Clones the process but does not execute
+  CALL CREATE_PROCESS
+  JP SYSCALL_END
 
 CREATE_PROCESS:
   PUSH AF
@@ -359,13 +368,10 @@ CREATE_PROCESS:
   INC A
   LD (PROC_COUNT), A ; Increment the process count
   POP AF
+
   CALL PUSH_PROCESS
 
-  SWITCH_TO_USER
-
-  LD HL, (TMP_REG1)
-  JP (HL)
-  
+  RET
 
 EXIT_PROCESS:
   LD A, (PROC_COUNT)
@@ -376,8 +382,8 @@ EXIT_PROCESS:
 
   SWITCH_TO_USER
 
-  LD IX, (TMP_REG3) ; Load the return address
-  JP (IX) ; Return to the caller
+  RET
+
 
 PUSH_PROCESS:
 
@@ -398,11 +404,11 @@ PUSH_PROCESS:
 
 
   LD HL, (USER_SP) ; Get the stack pointer before creating the new process
+  PUSH HL ; Save the old stack pointer
   LD E, (HL)
   INC HL
   LD D, (HL)
   PUSH DE ; Save the return address
-  PUSH HL ; Save the old stack pointer
 
   LD A, R
   PUSH AF ; Save the PID, exit code is defined on exit
@@ -410,7 +416,7 @@ PUSH_PROCESS:
   LD (PROCESS_SP), SP ; Save SP
 
   ; So the stack looks like this:
-  ; | old AF | old BC | old DE | old HL | return address | old SP | PID | exit code |
+  ; | old AF | old BC | old DE | old HL | old SP | return address | PID | exit code |
   
   LD SP, (TMP_REG2) ; Restore the old stack pointer
   RET
@@ -425,11 +431,11 @@ POP_PROCESS: ; Returns: AF, BC, DE, HL, SP, TMP3(Return address)
 
   POP AF ; Clear stack
 
-  POP HL ; Now the old stack pointer is in HL
-  LD (USER_SP), HL ; Set the user stack pointer to the just popped one
-
   POP HL ; Return address in HL
   LD (TMP_REG3), HL
+
+  POP HL ; Now the old stack pointer is in HL
+  LD (USER_SP), HL ; Set the user stack pointer to the just popped one
 
   ; Pop the registers
   POP HL
@@ -460,6 +466,7 @@ SYSCALL_TABLE:
   dw SYS_GETINFO
   dw SYS_RAND
   dw SYS_SLEEP
+  dw SYS_FORK
 
 
 SYSINFO:
