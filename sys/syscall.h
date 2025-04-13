@@ -9,14 +9,21 @@
 #define SYS_EXEC 5
 #define SYS_GETINFO 6
 #define SYS_RAND 7
+#define SYS_SLEEP 8
+#define SYS_FORK 9
+#define SYS_GETPID 10
 
 void sysc_exit(short code) __z88dk_fastcall;
 void sysc_write(short port, short len, char *str);
 void sysc_read(short port, short len, char *str);
 void sysc_gets(short len, char *str);
 void sysc_puts(short len, char *str);
-void sysc_exec(short len, short *addr);
+void sysc_exec(short *addr) __z88dk_fastcall;
 void sysc_getinfo(char *str);
 void sysc_rand(short *buf);
+void sysc_sleep(short ms);
+void sysc_fork(void);
+void sysc_getpid(char *buf) __z88dk_fastcall;
+void sysc_getpcount(char *buf) __z88dk_fastcall;
 
 #endif

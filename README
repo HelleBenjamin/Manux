@@ -5,7 +5,7 @@ So don't expect it to be Linux 2.0.
 
 Kernel API
 ==========
-All system calls must be called from user mode. The call vector is at 0xB000. It's at that address because the kernel is designed to be loaded from BASIC.
+All system calls must be called from user mode. The system call vector is at 0xB000. It's at that address because the kernel is designed to be loaded from BASIC.
 
 POSIX
 =====

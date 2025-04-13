@@ -15,6 +15,9 @@
 #ifndef ssize_t
 #define ssize_t int
 #endif
+#ifndef pid_t
+#define pid_t int
+#endif
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -23,5 +26,6 @@
 void _exit(short code);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
+pid_t fork(void);
 
 #endif

@@ -24,3 +24,8 @@ ssize_t write(int fd, const void *buf, size_t count) {
   }
   return count;
 }
+
+pid_t fork(void) {
+  sysc_fork();
+  return 0;
+}

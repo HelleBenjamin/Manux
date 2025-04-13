@@ -6,6 +6,23 @@ SECTION CODE
 
   ORG 0xB004 ; Kernel Area
 
+  MACRO SWITCH_TO_KERNEL
+    LD (USER_SP), SP
+    LD SP, (KERNEL_SP)
+    PUSH HL
+    LD HL, KERNEL_FLAGS
+    RES 1, (HL)
+    POP HL
+  ENDM
+
+  MACRO SWITCH_TO_USER
+    PUSH HL
+    LD HL, KERNEL_FLAGS
+    SET 1, (HL)
+    POP HL
+    LD SP, (USER_SP)
+  ENDM
+
 ; Memory map
 ; ----------
 ; | 0xFFFF |
@@ -191,6 +208,10 @@ ROOT_PROCESS:
 ;
 ; 0x09 - SYS_FORK
 ;   Description: Clone current process to new process
+;
+; 0x0A - SYS_GETPID
+;   HL - pointer to buffer
+;   Description: Get current process id
 
 SYSCALL_DISPATCH:
 

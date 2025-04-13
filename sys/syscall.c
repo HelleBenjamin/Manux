@@ -4,7 +4,7 @@
 #pragma define CRT_ENABLE_STDIO=0
 
 /*
-  This file implements syscalls in C API
+  Assembly syscall wrapper for C
 */
 
 void sysc_exit(short code) __z88dk_fastcall {
@@ -97,20 +97,8 @@ void sysc_puts(short len, char *str) {
   );
 }
 
-void sysc_exec(short len, short *addr) {
+void sysc_exec(short *addr) __z88dk_fastcall{
   asm(
-    "ld hl, 2\n"
-    "add hl, sp\n"
-    "ld e, (hl)\n" // Get address
-    "inc hl\n"
-    "ld d, (hl)\n"
-    "inc hl\n"
-    "push de\n"
-    "ld e, (hl)\n" // Get len
-    "inc hl\n"
-    "ld d, (hl)\n"
-    "inc hl\n"
-    "pop hl\n"
     "ld a, 5\n"
     "call $B000"
   );
@@ -142,6 +130,31 @@ void sysc_rand(short *buf) {
     "push de\n"
     "pop hl\n"
     "ld a, 7\n"
+    "call $B000"
+  );
+}
+
+void sysc_sleep(short ms) {
+  // TODO
+}
+
+void sysc_fork(void) {
+  asm(
+    "ld a, 9\n"
+    "call $B000"
+  );
+}
+
+void sysc_getpid(char *buf) __z88dk_fastcall {
+  asm(
+    "ld a, 10\n"
+    "call $B000"
+  );
+}
+
+void sysc_getpcount(char *buf) __z88dk_fastcall {
+  asm(
+    "ld a, 11\n"
     "call $B000"
   );
 }
