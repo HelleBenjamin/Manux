@@ -9,8 +9,11 @@ All system calls must be called from user mode. The system call vector is at 0xB
 
 POSIX
 =====
-Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs.
+Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs. Currently the supported features are input/output, fork, and exec.
 
+TODO
+====
+Better kernel loader(like z80ld)
 
 Building
 ========

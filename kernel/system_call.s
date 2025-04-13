@@ -73,6 +73,13 @@ SECTION CODE
 ; 0x0B - SYS_GETPCOUNT
 ;   HL - pointer to buffer
 ;   Description: Get process count
+; 0x0C - SYS_GETSYSMEM
+;   HL - pointer to buffer
+;   Description: Get whole system memory, like memtest
+;
+; 0x0D - SYS_GETUSEDMEM
+;   HL - pointer to buffer
+;   Description: Get used memory(used memory = initial user sp - current user sp)
 
 SYSCALL_DISPATCH:
 
@@ -198,16 +205,19 @@ SYS_GETS:
     JR Z, L_8 ; If enter, the string is ready
     LD (HL), A
     INC HL
+    CP 0x7F
+    JR Z, L_7_1 ; Sometimes the terminal emulator is configured to output backspace as 0x7F(DEL in ascii)
     CP 0x08
-    JR Z, L_7_1 ; If backspace, handle it
+    JR Z, L_7_1 ; Default backspace
     JR L_6
   L_7: ; Dec D
     DEC D
     JR L_6_1
   L_7_1: ; Handle backspace
     DEC HL
-    CALL PRINTC
+    DEC HL
     LD (HL), 0
+    INC DE
     JR L_6
   L_8: ; End loop
     JP SYSCALL_END
@@ -269,6 +279,11 @@ SYS_GETPCOUNT:
   LD A, (PROC_COUNT)
   LD (HL), A
   JP SYSCALL_END
+
+SYS_GETMEM:
+  JP SYSCALL_END
+
+SYS_GETUSEDMEM:
 
 SECTION DATA
 SYSCALL_TABLE:

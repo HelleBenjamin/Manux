@@ -100,7 +100,9 @@ void main() {
   uname(&sname);
   write(STDOUT_FILENO, sname.sysname, 8);
   write(STDOUT_FILENO, "\n\r", 2);
-  terminal();
+  fork();
+  sysc_exec((short *)terminal);
+  _exit(0);
 }
 
 void ZHEX() { // Z$ (Z-hex)
