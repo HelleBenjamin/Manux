@@ -2,6 +2,13 @@
 
 // Fast Emulator for Z80
 
+void execute(VirtZ80 *cpu) {
+  while (!cpu->halt) {
+    MainInstruction(cpu);
+  }
+}
+
+
 uint8_t fByte(VirtZ80 *cpu) {
   return cpu->memory[cpu->pc++];
 }
@@ -54,15 +61,34 @@ void setCoreRoutines() {
 }
 
 void updateFlags8(VirtZ80 *cpu, uint16_t alu_result) {
-  cpu->af = cpu->af | alu_result == 0 ? FLAG_Z : 0x00 | (alu_result & 0x80) < 0 ? FLAG_S : 0x00 | (alu_result & 0x100) ? FLAG_C : 0x00 | (alu_result & 0x10) ? FLAG_H : 0x00 | alu_result < -128 || alu_result > 127 ? FLAG_P : 0x00;
+  cpu->af = (cpu->af & ~(FLAG_Z | FLAG_S | FLAG_C | FLAG_H | FLAG_P)) |
+            (alu_result == 0 ? FLAG_Z : 0x00) |
+            (alu_result & 0x80 ? FLAG_S : 0x00) |
+            (alu_result & 0x10 ? FLAG_H : 0x00) |
+            (alu_result & 0x100 ? FLAG_C : 0x00) |
+            ((alu_result & 0x0F) + (cpu->af & FLAG_C ? 1 : 0) > 0xF ? FLAG_P : 0x00);
 }
 
 void updateFlags16(VirtZ80 *cpu, uint32_t alu_result) {
-  cpu->af = cpu->af | alu_result == 0 ? FLAG_Z : 0x00 | (alu_result & 0x8000) < 0 ? FLAG_S : 0x00 | (alu_result & 0x10000) ? FLAG_C : 0x00 | (alu_result & 0x100) ? FLAG_H : 0x00 | alu_result < -32768 || alu_result > 32767 ? FLAG_P : 0x00;
+  cpu->af = (cpu->af & ~(FLAG_Z | FLAG_S | FLAG_C | FLAG_H | FLAG_P)) |
+            (alu_result == 0 ? FLAG_Z : 0x00) |
+            (alu_result & 0x8000 ? FLAG_S : 0x00) |
+            (alu_result & 0x10000 ? FLAG_C : 0x00) |
+            (alu_result & 0x100 ? FLAG_H : 0x00) |
+            (alu_result < -32768 || alu_result > 32767 ? FLAG_P : 0x00);
 }
 
 uint8_t getFlag(VirtZ80 *cpu, uint8_t flag) {
   return cpu->af & flag;
+}
+
+void OutputHandler(uint8_t port, uint8_t value) {
+  if (port == 0x01) putchar(value); // STDOUT
+}
+
+uint8_t InputHandler(uint8_t port) {
+  if (port == 0x00) return getchar(); // STDIN
+  return 0;
 }
 
 void alu8(VirtZ80 *cpu, uint8_t* dest, uint8_t value, uint8_t ins) {
@@ -190,7 +216,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 10;
       break;
     case 0x02: // LD (BC), A
-      cpu->memory[cpu->bc] = (cpu->af & 0xFF00);
+      cpu->memory[cpu->bc] = getHigh(cpu->af);
       cpu->cycles += 7;
       break;
     case 0x03: // INC BC
@@ -200,22 +226,22 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x04: // INC B
       temp1 = getHigh(cpu->bc);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadHigh(cpu->bc, temp1);
+      loadHigh(&cpu->bc, temp1);
       cpu->cycles += 4;
       break;
     case 0x05: // DEC B
       temp1 = getHigh(cpu->bc);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->bc, temp1);
+      loadHigh(&cpu->bc, temp1);
       cpu->cycles += 4;
       break;
     case 0x06: // LD B, n
-      loadHigh(cpu->bc, fByte(cpu));
+      loadHigh(&cpu->bc, fByte(cpu));
       cpu->cycles += 7;
     case 0x07: // RLCA
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_RLC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x08: // EX AF, AF'
@@ -228,7 +254,7 @@ void MainInstruction(VirtZ80 *cpu) {
       break;
     case 0x0A: // LD A, (BC)
       temp1 = cpu->memory[cpu->bc];
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x0B: // DEC BC
@@ -238,29 +264,29 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x0C: // INC C
       temp1 = getLow(cpu->bc);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadHigh(cpu->bc, temp1);
+      loadHigh(&cpu->bc, temp1);
       cpu->cycles += 4;
       break;
     case 0x0D: // DEC C
       temp1 = getLow(cpu->bc);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->bc, temp1);
+      loadHigh(&cpu->bc, temp1);
       cpu->cycles += 4;
       break;
     case 0x0E: // LD C, n
-      loadLow(cpu->bc, fByte(cpu));
+      loadLow(&cpu->bc, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x0F: // RRCA
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_RRC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x10: // DJNZ d
       temp1 = getHigh(cpu->bc);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->bc, temp1);
+      loadHigh(&cpu->bc, temp1);
       if (temp1 != 0) {
         cpu->pc += (int8_t)fByte(cpu);
         cpu->cycles += 13;
@@ -283,23 +309,23 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x14: // INC D
       temp1 = getHigh(cpu->de);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadHigh(cpu->de, temp1);
+      loadHigh(&cpu->de, temp1);
       cpu->cycles += 4;
       break;
     case 0x15: // DEC D
       temp1 = getHigh(cpu->de);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->de, temp1);
+      loadHigh(&cpu->de, temp1);
       cpu->cycles += 4;
       break;
     case 0x16: // LD D, n
-      loadHigh(cpu->de, fByte(cpu));
+      loadHigh(&cpu->de, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x17: // RLA
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_RL);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x18: // JR d
@@ -312,7 +338,7 @@ void MainInstruction(VirtZ80 *cpu) {
       break;
     case 0x1A: // LD A, (DE)
       temp1 = cpu->memory[cpu->de];
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x1B: // DEC DE
@@ -322,23 +348,23 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x1C: // INC E
       temp1 = getLow(cpu->de);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadHigh(cpu->de, temp1);
+      loadHigh(&cpu->de, temp1);
       cpu->cycles += 4;
       break;
     case 0x1D: // DEC E
       temp1 = getLow(cpu->de);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->de, temp1);
+      loadHigh(&cpu->de, temp1);
       cpu->cycles += 4;
       break;
     case 0x1E: // LD E, n
-      loadLow(cpu->de, fByte(cpu));
+      loadLow(&cpu->de, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x1F: // RRA
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_RR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x20: // JR NZ, d
@@ -367,17 +393,17 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x24: // INC H
       temp1 = getHigh(cpu->hl);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadHigh(cpu->hl, temp1);
+      loadHigh(&cpu->hl, temp1);
       cpu->cycles += 4;
       break;
     case 0x25: // DEC H
       temp1 = getHigh(cpu->hl);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadHigh(cpu->hl, temp1);
+      loadHigh(&cpu->hl, temp1);
       cpu->cycles += 4;
       break;
     case 0x26: // LD H, n
-      loadHigh(cpu->hl, fByte(cpu));
+      loadHigh(&cpu->hl, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x27: // DAA
@@ -399,8 +425,8 @@ void MainInstruction(VirtZ80 *cpu) {
       break;
     case 0x2A: // LD HL, (nn)
       temp1 = fWord(cpu);
-      loadLow(cpu->hl, cpu->memory[temp1]);
-      loadHigh(cpu->hl, cpu->memory[temp1 + 1]);
+      loadLow(&cpu->hl, cpu->memory[temp1]);
+      loadHigh(&cpu->hl, cpu->memory[temp1 + 1]);
       cpu->cycles += 16;
       break;
     case 0x2B: // DEC HL
@@ -410,23 +436,23 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x2C: // INC L
       temp1 = getLow(cpu->hl);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadLow(cpu->hl, temp1);
+      loadLow(&cpu->hl, temp1);
       cpu->cycles += 4;
       break;
     case 0x2D: // DEC L
       temp1 = getLow(cpu->hl);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadLow(cpu->hl, temp1);
+      loadLow(&cpu->hl, temp1);
       cpu->cycles += 4;
       break;
     case 0x2E: // LD L, n
-      loadLow(cpu->hl, fByte(cpu));
+      loadLow(&cpu->hl, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x2F: // CPL
       temp1 = getHigh(cpu->af);
       temp1 = ~temp1;
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x30: // JR NC, d
@@ -486,7 +512,7 @@ void MainInstruction(VirtZ80 *cpu) {
       break;
     case 0x3A: // LD A, (nn)
       temp1 = fWord(cpu);
-      loadLow(cpu->af, cpu->memory[temp1]);
+      loadLow(&cpu->af, cpu->memory[temp1]);
       cpu->cycles += 13;
       break;
     case 0x3B: // DEC SP
@@ -496,17 +522,17 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x3C: // INC A
       temp1 = getLow(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_INC);
-      loadLow(cpu->af, temp1);
+      loadLow(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x3D: // DEC A
       temp1 = getLow(cpu->af);
       alu8(cpu, &temp1, 0, ALU_OP_DEC);
-      loadLow(cpu->af, temp1);
+      loadLow(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x3E: // LD A, n
-      loadLow(cpu->af, fByte(cpu));
+      loadLow(&cpu->af, fByte(cpu));
       cpu->cycles += 7;
       break;
     case 0x3F: // CCF
@@ -517,176 +543,176 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 4;
       break;
     case 0x41: // LD B, C
-      loadHigh(cpu->bc, getLow(cpu->bc));
+      loadHigh(&cpu->bc, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x42: // LD B, D
-      loadHigh(cpu->bc, getHigh(cpu->de));
+      loadHigh(&cpu->bc, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x43: // LD B, E
-      loadHigh(cpu->bc, getLow(cpu->de));
+      loadHigh(&cpu->bc, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x44: // LD B, H
-      loadHigh(cpu->bc, getHigh(cpu->hl));
+      loadHigh(&cpu->bc, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x45: // LD B, L
-      loadHigh(cpu->bc, getLow(cpu->hl));
+      loadHigh(&cpu->bc, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x46: // LD B, (HL)
-      loadHigh(cpu->bc, cpu->memory[cpu->hl]);
+      loadHigh(&cpu->bc, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x47: // LD B, A
-      loadHigh(cpu->bc, getHigh(cpu->af));
+      loadHigh(&cpu->bc, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x48: // LD C, B
-      loadLow(cpu->bc, getHigh(cpu->bc));
+      loadLow(&cpu->bc, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x49: // LD C, C
       cpu->cycles += 4;
       break;
     case 0x4A: // LD C, D
-      loadLow(cpu->bc, getHigh(cpu->de));
+      loadLow(&cpu->bc, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x4B: // LD C, E
-      loadLow(cpu->bc, getLow(cpu->de));
+      loadLow(&cpu->bc, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x4C: // LD C, H
-      loadLow(cpu->bc, getHigh(cpu->hl));
+      loadLow(&cpu->bc, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x4D: // LD C, L
-      loadLow(cpu->bc, getLow(cpu->hl));
+      loadLow(&cpu->bc, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x4E: // LD C, (HL)
-      loadLow(cpu->bc, cpu->memory[cpu->hl]);
+      loadLow(&cpu->bc, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x4F: // LD C, A
-      loadLow(cpu->bc, getHigh(cpu->af));
+      loadLow(&cpu->bc, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x50: // LD D, B
-      loadHigh(cpu->de, getHigh(cpu->bc));
+      loadHigh(&cpu->de, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x51: // LD D, C
-      loadHigh(cpu->de, getLow(cpu->bc));
+      loadHigh(&cpu->de, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x52: // LD D, D
       cpu->cycles += 4;
       break;
     case 0x53: // LD D, E
-      loadHigh(cpu->de, getLow(cpu->de));
+      loadHigh(&cpu->de, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x54: // LD D, H
-      loadHigh(cpu->de, getHigh(cpu->hl));
+      loadHigh(&cpu->de, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x55: // LD D, L
-      loadHigh(cpu->de, getLow(cpu->hl));
+      loadHigh(&cpu->de, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x56: // LD D, (HL)
-      loadHigh(cpu->de, cpu->memory[cpu->hl]);
+      loadHigh(&cpu->de, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x57: // LD D, A
-      loadHigh(cpu->de, getHigh(cpu->af));
+      loadHigh(&cpu->de, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x58: // LD E, B
-      loadLow(cpu->de, getHigh(cpu->bc));
+      loadLow(&cpu->de, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x59: // LD E, C
-      loadLow(cpu->de, getLow(cpu->bc));
+      loadLow(&cpu->de, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x5A: // LD E, D
-      loadLow(cpu->de, getHigh(cpu->de));
+      loadLow(&cpu->de, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x5B: // LD E, E
       cpu->cycles += 4;
       break;
     case 0x5C: // LD E, H
-      loadLow(cpu->de, getHigh(cpu->hl));
+      loadLow(&cpu->de, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x5D: // LD E, L
-      loadLow(cpu->de, getLow(cpu->hl));
+      loadLow(&cpu->de, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x5E: // LD E, (HL)
-      loadLow(cpu->de, cpu->memory[cpu->hl]);
+      loadLow(&cpu->de, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x5F: // LD E, A
-      loadLow(cpu->de, getHigh(cpu->af));
+      loadLow(&cpu->de, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x60: // LD H, B
-      loadHigh(cpu->hl, getHigh(cpu->bc));
+      loadHigh(&cpu->hl, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x61: // LD H, C
-      loadHigh(cpu->hl, getLow(cpu->bc));
+      loadHigh(&cpu->hl, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x62: // LD H, D
-      loadHigh(cpu->hl, getHigh(cpu->de));
+      loadHigh(&cpu->hl, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x63: // LD H, E
-      loadHigh(cpu->hl, getLow(cpu->de));
+      loadHigh(&cpu->hl, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x64: // LD H, H
       cpu->cycles += 4;
       break;
     case 0x65: // LD H, L
-      loadHigh(cpu->hl, getLow(cpu->hl));
+      loadHigh(&cpu->hl, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x66: // LD H, (HL)
       temp1 = cpu->hl;
-      loadHigh(cpu->hl, cpu->memory[cpu->hl]);
+      loadHigh(&cpu->hl, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x67: // LD H, A
-      loadHigh(cpu->hl, getHigh(cpu->af));
+      loadHigh(&cpu->hl, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x68: // LD L, B
-      loadLow(cpu->hl, getHigh(cpu->bc));
+      loadLow(&cpu->hl, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x69: // LD L, C
-      loadLow(cpu->hl, getLow(cpu->bc));
+      loadLow(&cpu->hl, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x6A: // LD L, D
-      loadLow(cpu->hl, getHigh(cpu->de));
+      loadLow(&cpu->hl, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x6B: // LD L, E
-      loadLow(cpu->hl, getLow(cpu->de));
+      loadLow(&cpu->hl, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x6C: // LD L, H
-      loadLow(cpu->hl, getHigh(cpu->hl));
+      loadLow(&cpu->hl, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x6D: // LD L, L
@@ -694,11 +720,11 @@ void MainInstruction(VirtZ80 *cpu) {
       break;
     case 0x6E: // LD L, (HL)
       temp1 = cpu->hl;
-      loadLow(cpu->hl, cpu->memory[temp1]);
+      loadLow(&cpu->hl, cpu->memory[temp1]);
       cpu->cycles += 7;
       break;
     case 0x6F: // LD L, A
-      loadLow(cpu->hl, getHigh(cpu->af));
+      loadLow(&cpu->hl, getHigh(cpu->af));
       cpu->cycles += 4;
       break;
     case 0x70: // LD (HL), B
@@ -734,31 +760,31 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 7;
       break;
     case 0x78: // LD A, B
-      loadHigh(cpu->af, getHigh(cpu->bc));
+      loadHigh(&cpu->af, getHigh(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x79: // LD A, C
-      loadHigh(cpu->af, getLow(cpu->bc));
+      loadHigh(&cpu->af, getLow(cpu->bc));
       cpu->cycles += 4;
       break;
     case 0x7A: // LD A, D
-      loadHigh(cpu->af, getHigh(cpu->de));
+      loadHigh(&cpu->af, getHigh(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x7B: // LD A, E
-      loadHigh(cpu->af, getLow(cpu->de));
+      loadHigh(&cpu->af, getLow(cpu->de));
       cpu->cycles += 4;
       break;
     case 0x7C: // LD A, H
-      loadHigh(cpu->af, getHigh(cpu->hl));
+      loadHigh(&cpu->af, getHigh(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x7D: // LD A, L
-      loadHigh(cpu->af, getLow(cpu->hl));
+      loadHigh(&cpu->af, getLow(cpu->hl));
       cpu->cycles += 4;
       break;
     case 0x7E: // LD A, (HL)
-      loadHigh(cpu->af, cpu->memory[cpu->hl]);
+      loadHigh(&cpu->af, cpu->memory[cpu->hl]);
       cpu->cycles += 7;
       break;
     case 0x7F: // LD A, A
@@ -767,337 +793,337 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x80: // ADD A, B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x81: // ADD A, C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x82: // ADD A, D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x83: // ADD A, E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x84: // ADD A, H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x85: // ADD A, L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x86: // ADD A, (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x87: // ADD A, A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x88: // ADC A, B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x89: // ADC A, C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x8A: // ADC A, D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x8B: // ADC A, E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x8C: // ADC A, H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x8D: // ADC A, L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x8E: // ADC A, (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x8F: // ADC A, A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x90: // SUB B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x91: // SUB C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x92: // SUB D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x93: // SUB E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x94: // SUB H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x95: // SUB L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x96: // SUB (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x97: // SUB A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x98: // SBC A, B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x99: // SBC A, C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x9A: // SBC A, D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x9B: // SBC A, E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x9C: // SBC A, H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x9D: // SBC A, L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0x9E: // SBC A, (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0x9F: // SBC A, A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA0: // AND B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA1: // AND C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA2: // AND D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA3: // AND E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA4: // AND H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA5: // AND L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA6: // AND (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xA7: // AND A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA8: // XOR B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xA9: // XOR C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xAA: // XOR D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xAB: // XOR E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xAC: // XOR H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xAD: // XOR L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xAE: // XOR (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xAF: // XOR A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB0: // OR B
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->bc), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB1: // OR C
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->bc), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB2: // OR D
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->de), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB3: // OR E
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->de), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB4: // OR H
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->hl), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB5: // OR L
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getLow(cpu->hl), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB6: // OR (HL)
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xB7: // OR A
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 4;
       break;
     case 0xB8: // CP B
@@ -1180,7 +1206,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xC6: // ADD A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_ADD);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xC7: // RST 0
@@ -1228,7 +1254,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xCE: // ADC A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_ADC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xCF: // RST 8
@@ -1255,6 +1281,11 @@ void MainInstruction(VirtZ80 *cpu) {
       }
       cpu->cycles += 10;
       break;
+    case 0xD3: // OUT (n), A
+      temp1 = getHigh(cpu->af);
+      OutputHandler(fByte(cpu), temp1);
+      cpu->cycles += 11;
+      break;
     case 0xD4: // CALL NC, nn
       cpu->wz = fWord(cpu);
       if (getFlag(cpu, FLAG_C) == 0) {
@@ -1271,7 +1302,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xD6: // SUB A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_SUB);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xD7: // RST 10
@@ -1300,6 +1331,12 @@ void MainInstruction(VirtZ80 *cpu) {
       }
       cpu->cycles += 10;
       break;
+    case 0xDB: // IN A, (n)
+      temp1 = getHigh(cpu->af);
+      temp1 = InputHandler(fByte(cpu));
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 11;
+      break;
     case 0xDC: // CALL C, nn
       cpu->wz = fWord(cpu);
       if (getFlag(cpu, FLAG_C) != 0) {
@@ -1314,7 +1351,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xDE: // SBC A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_SBC);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xDF: // RST 18
@@ -1366,7 +1403,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xE6: // AND A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_AND);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xE7: // RST 20
@@ -1412,7 +1449,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xEE: // XOR A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_XOR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xEF: // RST 28
@@ -1459,7 +1496,7 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0xF6: // OR A, n
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, fByte(cpu), ALU_OP_OR);
-      loadHigh(cpu->af, temp1);
+      loadHigh(&cpu->af, temp1);
       cpu->cycles += 7;
       break;
     case 0xF7: // RST 30
@@ -1525,6 +1562,14 @@ void BitInstruction(VirtZ80 *cpu) {
 
 }
 
+void printState(VirtZ80 *cpu) {
+  printf(
+    "AF=0x%04x BC=0x%04x DE=0x%04x HL=0x%04x SP=0x%04x PC=0x%04x\n",
+    cpu->af, cpu->bc, cpu->de, cpu->hl, cpu->sp, cpu->pc
+  );
+}
+
+
 int main(int argc, char **argv) {
   if (argc < 2) {
     perror("Usage: %s <program>\n");
@@ -1552,4 +1597,9 @@ int main(int argc, char **argv) {
 
   memcpy(cpu.memory, src_hex, file_size);
 
+  printf("Loaded %d bytes\n", i);
+
+  execute(&cpu);
+  printState(&cpu);
+  return 0;
 }

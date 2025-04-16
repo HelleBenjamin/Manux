@@ -4,6 +4,7 @@
     "stdio.h": "c",
     "syscall.h": "c",
     "unistd.h": "c",
-    "utsname.h": "c"
+    "utsname.h": "c",
+    "random": "c"
   }
 }

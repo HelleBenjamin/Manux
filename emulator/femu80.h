@@ -37,15 +37,6 @@
 #define ALU_OP_RES 0x12
 #define ALU_OP_SET 0x13
 
-uint8_t fByte(VirtZ80 *cpu);
-uint16_t fWord(VirtZ80 *cpu);
-void loadLow(uint16_t *reg, uint8_t value);
-void loadHigh(uint16_t *reg, uint8_t value);
-uint8_t getHigh(uint16_t reg);
-uint8_t getLow(uint16_t reg);
-void exchange(uint16_t *reg1, uint16_t *reg2);
-
-
 typedef struct {
   // Registers
   uint16_t af, bc, de, hl, afa, bca, dea, hla; // General purpose registers and shadow registers
@@ -60,5 +51,25 @@ typedef struct {
   bool halt;
   uint64_t cycles; // CPU cycles
 } VirtZ80;
+
+void execute(VirtZ80 *cpu);
+
+void OutputHandler(uint8_t port, uint8_t value);
+uint8_t InputHandler(uint8_t port);
+
+uint8_t fByte(VirtZ80 *cpu);
+uint16_t fWord(VirtZ80 *cpu);
+void loadLow(uint16_t *reg, uint8_t value);
+void loadHigh(uint16_t *reg, uint8_t value);
+uint8_t getHigh(uint16_t reg);
+uint8_t getLow(uint16_t reg);
+void exchange(uint16_t *reg1, uint16_t *reg2);
+void push(VirtZ80 *cpu, uint16_t value);
+uint16_t pop(VirtZ80 *cpu);
+void printState(VirtZ80 *cpu);
+
+void MainInstruction(VirtZ80 *cpu);
+void MiscInstruction(VirtZ80 *cpu);
+void BitInstruction(VirtZ80 *cpu);
 
 #endif
