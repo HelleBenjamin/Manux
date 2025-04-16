@@ -30,6 +30,12 @@ uint8_t getLow(uint16_t reg) {
   return reg & 0xFF;
 }
 
+void exchange(uint16_t *reg1, uint16_t *reg2) {
+  uint16_t temp = *reg1;
+  *reg1 = *reg2;
+  *reg2 = temp;
+}
+
 void setCoreRoutines() {
 
 }
@@ -188,7 +194,112 @@ void MainInstruction(VirtZ80 *cpu) {
     case 0x06: // LD B, n
       loadHigh(cpu->bc, fByte(cpu));
       cpu->cycles += 7;
+    case 0x07: // RLCA
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadHigh(cpu->af, temp1);
+      cpu->cycles += 4;
       break;
+    0x08: // EX AF, AF'
+      exchange(&cpu->af, &cpu->afa);
+      cpu->cycles += 4;
+      break;
+    0x09: // ADD HL, BC
+      alu16(cpu, &cpu->hl, cpu->bc, ALU_OP_ADD);
+      cpu->cycles += 11;
+      break;
+    0x0A: // LD A, (BC)
+      temp1 = cpu->memory[cpu->bc];
+      loadHigh(cpu->af, temp1);
+      cpu->cycles += 7;
+      break;
+    0x0B: // DEC BC
+      cpu->bc--;
+      cpu->cycles += 6;
+      break;
+    0x0C: // INC C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_INC);
+      loadHigh(cpu->bc, temp1);
+      cpu->cycles += 4;
+      break;
+    0x0D: // DEC C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_DEC);
+      loadHigh(cpu->bc, temp1);
+      cpu->cycles += 4;
+      break;
+    0x0E: // LD C, n
+      loadLow(cpu->bc, fByte(cpu));
+      cpu->cycles += 7;
+      break;
+    0x0F: // RRCA
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadHigh(cpu->af, temp1);
+      cpu->cycles += 4;
+      break;
+    0x10: // DJNZ d
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_DEC);
+      loadHigh(cpu->bc, temp1);
+      if (temp1 != 0) {
+        cpu->pc += (int8_t)fByte(cpu);
+        cpu->cycles += 13;
+        break;
+      }
+      cpu->cycles += 8;
+      break;
+    0x11: // LD DE, nn
+      cpu->de = fWord(cpu);
+      cpu->cycles += 10;
+      break;
+    0x12: // LD (DE), A
+      cpu->memory[cpu->de] = getHigh(cpu->af);
+      cpu->cycles += 7;
+      break;
+    0x13: // INC DE
+      cpu->de++;
+      cpu->cycles += 6;
+      break;
+    0x14: // INC D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_INC);
+      loadHigh(cpu->de, temp1);
+      cpu->cycles += 4;
+      break;
+    0x15: // DEC D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_DEC);
+      loadHigh(cpu->de, temp1);
+      cpu->cycles += 4;
+      break;
+    0x16: // LD D, n
+      loadHigh(cpu->de, fByte(cpu));
+      cpu->cycles += 7;
+      break;
+    0x17: // RLA
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadHigh(cpu->af, temp1);
+      cpu->cycles += 4;
+      break;
+    0x18: // JR d
+      cpu->pc += (int8_t)fByte(cpu);
+      cpu->cycles += 12;
+      break;
+    0x19: // ADD HL, DE
+      alu16(cpu, &cpu->hl, cpu->de, ALU_OP_ADD);
+      cpu->cycles += 11;
+      break;
+    0x1A: // LD A, (DE)
+      temp1 = cpu->memory[cpu->de];
+      loadHigh(cpu->af, temp1);
+      cpu->cycles += 7;
+      break;
+    0x1B: // DEC DE
+      cpu->de--;
+      cpu->cycles += 6;
     default:
       cpu->cycles += 4;
       break;
