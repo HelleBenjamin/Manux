@@ -4,6 +4,7 @@
 
 void execute(VirtZ80 *cpu) {
   while (!cpu->halt) {
+    cpu->r += 1;
     MainInstruction(cpu);
   }
 }
@@ -101,13 +102,13 @@ void alu8(VirtZ80 *cpu, uint8_t* dest, uint8_t value, uint8_t ins) {
       result = *dest + value;
       break;
     case ALU_OP_ADC:
-      result = *dest + value + ((cpu->af & 0x00FF) & FLAG_C);
+      result = *dest + value + getFlag(cpu, FLAG_C);
       break;
     case ALU_OP_SUB:
       result = *dest - value;
       break;
     case ALU_OP_SBC:
-      result = *dest - value - ((cpu->af & 0x00FF) & FLAG_C);
+      result = *dest - value - getFlag(cpu, FLAG_C);
       break;
     case ALU_OP_AND:
       result = *dest & value;
@@ -136,10 +137,10 @@ void alu8(VirtZ80 *cpu, uint8_t* dest, uint8_t value, uint8_t ins) {
       result = (*dest >> 1) | (*dest << 7);
       break;
     case ALU_OP_RL:
-      result = (*dest << 1) | (cpu->af & 0x00FF) & FLAG_C;
+      result = (*dest << 1) | getFlag(cpu, FLAG_C);
       break;
     case ALU_OP_RR:
-      result = (*dest >> 1) | ((cpu->af & 0x00FF) & FLAG_C) << 7;
+      result = (*dest >> 1) | getFlag(cpu, FLAG_C) << 7;
       break;
     case ALU_OP_SLA:
       result = (*dest << 1);
@@ -180,13 +181,13 @@ void alu16(VirtZ80 *cpu, uint16_t* dest, uint16_t value, uint8_t ins) {
       result = *dest + value;
       break;
     case ALU_OP_ADC:
-      result = *dest + value + ((cpu->af & 0x00FF) & FLAG_C);
+      result = *dest + value + getFlag(cpu, FLAG_C);
       break;
     case ALU_OP_SUB:
       result = *dest - value;
       break;
     case ALU_OP_SBC:
-      result = *dest - value - ((cpu->af & 0x00FF) & FLAG_C);
+      result = *dest - value - getFlag(cpu, FLAG_C);
       break;
     case ALU_OP_INC:
       result = *dest + 1;
@@ -424,9 +425,9 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 11;
       break;
     case 0x2A: // LD HL, (nn)
-      temp1 = fWord(cpu);
-      loadLow(&cpu->hl, cpu->memory[temp1]);
-      loadHigh(&cpu->hl, cpu->memory[temp1 + 1]);
+      addr = fWord(cpu);
+      loadLow(&cpu->hl, cpu->memory[addr]);
+      loadHigh(&cpu->hl, cpu->memory[addr + 1]);
       cpu->cycles += 16;
       break;
     case 0x2B: // DEC HL
@@ -469,8 +470,8 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 10;
       break;
     case 0x32: // LD (nn), A
-      temp1 = fWord(cpu);
-      cpu->memory[temp1] = getLow(cpu->af);
+      addr = fWord(cpu);
+      cpu->memory[addr] = getLow(cpu->af);
       cpu->cycles += 13;
       break;
     case 0x33: // INC SP
@@ -511,8 +512,8 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 11;
       break;
     case 0x3A: // LD A, (nn)
-      temp1 = fWord(cpu);
-      loadLow(&cpu->af, cpu->memory[temp1]);
+      addr = fWord(cpu);
+      loadLow(&cpu->af, cpu->memory[addr]);
       cpu->cycles += 13;
       break;
     case 0x3B: // DEC SP
@@ -1555,7 +1556,46 @@ void MainInstruction(VirtZ80 *cpu) {
 }
 
 void MiscInstruction(VirtZ80 *cpu) {
-
+  uint8_t opcode = fByte(cpu);
+  uint8_t temp1 = 0;
+  uint16_t addr = 0;
+  switch (opcode) {
+    case 0x40: // IN B, (C)
+      loadHigh(&cpu->bc, InputHandler(getLow(cpu->bc)));
+      cpu->cycles += 12;
+      break;
+    case 0x41: // OUT (C), B
+      OutputHandler(getLow(cpu->bc), getHigh(cpu->bc));
+      cpu->cycles += 12;
+      break;
+    case 0x42: // SBC HL, BC
+      alu16(cpu, &cpu->hl, cpu->bc, ALU_OP_SBC);
+      cpu->cycles += 15;
+      break;
+    case 0x43: // LD (nn), BC
+      addr = fWord(cpu);
+      cpu->memory[addr] = getLow(cpu->bc);
+      cpu->memory[addr + 1] = getHigh(cpu->bc);
+      cpu->cycles += 20;
+      break;
+    case 0x44: // NEG
+      temp1 = 0;
+      alu8(cpu, &temp1, getHigh(cpu->af), ALU_OP_SUB);
+      loadLow(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x45: // RET
+      cpu->pc = pop(cpu);
+      cpu->cycles += 10;
+      break;
+    case 0x46: // IM 0
+      cpu->im = 0;
+      cpu->cycles += 5;
+      break;
+    case 0x47: // LD I, A
+      cpu->i = getLow(cpu->af);
+      
+  }
 }
 
 void BitInstruction(VirtZ80 *cpu) {
@@ -1564,8 +1604,8 @@ void BitInstruction(VirtZ80 *cpu) {
 
 void printState(VirtZ80 *cpu) {
   printf(
-    "AF=0x%04x BC=0x%04x DE=0x%04x HL=0x%04x SP=0x%04x PC=0x%04x\n",
-    cpu->af, cpu->bc, cpu->de, cpu->hl, cpu->sp, cpu->pc
+    "AF=0x%04x BC=0x%04x DE=0x%04x HL=0x%04x SP=0x%04x PC=0x%04x T=0x%04x\n",
+    cpu->af, cpu->bc, cpu->de, cpu->hl, cpu->sp, cpu->pc, cpu->cycles
   );
 }
 
