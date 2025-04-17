@@ -1,5 +1,6 @@
-#include "syscall.h"
+// SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "syscall.h"
 
 #pragma define CRT_ENABLE_STDIO=0
 

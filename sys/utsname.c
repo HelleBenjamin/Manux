@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2025 Benjamin Helle
+
 #include "utsname.h"
 #include "syscall.h"
 #include <string.h>
@@ -8,11 +11,3 @@ short uname(struct utsname *buf) {
   memcpy(buf, nbuf, 40);
   return 0;
 }
-
-/*char *n = "Manux Z80-PC 0.1-alpha Z80            ";
-char *k = "Manux  ";
-char *l = "Z80-PC ";
-char *m = "0.1    ";
-char *r = "alpha  ";
-char *v = "Z80    ";
-char *uname = "Manux   Z80-PC  0.1     alpha   Z80    ";*/

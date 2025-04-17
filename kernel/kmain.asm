@@ -1,4 +1,6 @@
-  
+; SPDX-License-Identifier: GPL-2.0-or-later
+; Copyright (c) 2025 Benjamin Helle
+
 SECTION CODE  
   ORG $B004
 
@@ -19,21 +21,21 @@ SECTION CODE
   ; bit 6 - unused
   ; bit 7 - unused
 
-; Memory map
-; ----------
-; | 0xFFFF |
-; | 0xF000 |
-; | 0xE000 |
-; | 0xD000 |
-; | 0xC000 | BSS section ^
-; | 0xB004 | Kernel ^
-; | 0xB000 | Syscall call vector
-; | 0xA500 | OS Stack V
-; | 0xA000 |
-; | 0x9000 |
-; | 0x8000 | BASIC WORKSPACE ^
-; | 0x0000 | BASIC ROM
-; ----------
+  ; Memory map
+  ; ----------
+  ; | 0xFFFF |
+  ; | 0xF000 |
+  ; | 0xE000 |
+  ; | 0xD000 |
+  ; | 0xC000 | BSS section ^
+  ; | 0xB004 | Kernel ^
+  ; | 0xB000 | Syscall call vector
+  ; | 0xA500 | OS Stack V
+  ; | 0xA000 |
+  ; | 0x9000 |
+  ; | 0x8000 | BASIC WORKSPACE ^
+  ; | 0x0000 | BASIC ROM
+  ; ----------
 
 KERNEL_ENTRY:
   LD HL, 0

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2025 Benjamin Helle
+
 #include "unistd.h"
 #include "syscall.h"
 
