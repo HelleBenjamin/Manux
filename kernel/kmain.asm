@@ -38,6 +38,7 @@ SECTION CODE
   ; ----------
 
 KERNEL_ENTRY:
+  PUSH HL
   LD HL, 0
   ADD HL, SP
   LD SP, KERNEL_STACK ; Set kernel stack
@@ -99,6 +100,7 @@ KERNEL_ENTRY:
 
   POP HL ; Restore old sp
   LD SP, HL
+  POP HL
   RET ; Return back to BASIC
 
 ROOT_PROCESS:

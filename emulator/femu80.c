@@ -1584,22 +1584,1816 @@ void MiscInstruction(VirtZ80 *cpu) {
       loadLow(&cpu->af, temp1);
       cpu->cycles += 8;
       break;
-    case 0x45: // RET
+    case 0x45: // RETN
       cpu->pc = pop(cpu);
-      cpu->cycles += 10;
+      cpu->iff1 = cpu->iff2;
+      cpu->cycles += 14;
       break;
     case 0x46: // IM 0
       cpu->im = 0;
-      cpu->cycles += 5;
+      cpu->cycles += 8;
       break;
     case 0x47: // LD I, A
       cpu->i = getLow(cpu->af);
-      
+      cpu->cycles += 9;
+      break;
+    case 0x48: // IN C, (C)
+      loadHigh(&cpu->bc, InputHandler(getLow(cpu->bc)));
+      cpu->cycles += 12;
+      break;
+    case 0x49: // OUT (C), C
+      OutputHandler(getLow(cpu->bc), getHigh(cpu->bc));
+      cpu->cycles += 12;
+      break;
+    case 0x4A: // ADC HL, BC
+      alu16(cpu, &cpu->hl, cpu->bc, ALU_OP_ADC);
+      cpu->cycles += 15;
+      break;
+    case 0x4B: // LD BC, (nn)
+      addr = fWord(cpu);
+      cpu->bc = cpu->memory[addr];
+      cpu->bc |= cpu->memory[addr + 1] << 8;
+      cpu->cycles += 20;
+      break;
+    case 0x4D: // RETI
+      cpu->pc = pop(cpu);
+      cpu->iff1 = 1;
+      cpu->iff2 = 1;
+      cpu->cycles += 14;
+      break;
+    case 0x4F: // LD R, A
+      cpu->r = getLow(cpu->af);
+      cpu->cycles += 9;
+      break;
+    case 0x50: // IN D, (C)
+      loadHigh(&cpu->de, InputHandler(getLow(cpu->de)));
+      cpu->cycles += 12;
+      break;
+    case 0x51: // OUT (C), D
+      OutputHandler(getLow(cpu->de), getHigh(cpu->de));
+      cpu->cycles += 12;
+      break;
+    case 0x52: // SBC HL, DE
+      alu16(cpu, &cpu->hl, cpu->de, ALU_OP_SBC);
+      cpu->cycles += 15;
+      break;
+    case 0x53: // LD (nn), DE
+      addr = fWord(cpu);
+      cpu->memory[addr] = getLow(cpu->de);
+      cpu->memory[addr + 1] = getHigh(cpu->de);
+      cpu->cycles += 20;
+      break;
+    case 0x56: // IM 1
+      cpu->im = 1;
+      cpu->cycles += 8;
+      break;
+    case 0x57: // LD A, I
+      loadLow(&cpu->af, cpu->i);
+      cpu->cycles += 9;
+      break;
+    case 0x58: // IN E, (C)
+      loadHigh(&cpu->de, InputHandler(getLow(cpu->de)));
+      cpu->cycles += 12;
+      break;
+    case 0x59: // OUT (C), E
+      OutputHandler(getLow(cpu->de), getHigh(cpu->de));
+      cpu->cycles += 12;
+      break;
+    case 0x5A: // ADC HL, DE
+      alu16(cpu, &cpu->hl, cpu->de, ALU_OP_ADC);
+      cpu->cycles += 15;
+      break;
+    case 0x5B: // LD DE, (nn)
+      addr = fWord(cpu);
+      cpu->de = cpu->memory[addr];
+      cpu->de |= cpu->memory[addr + 1] << 8;
+      cpu->cycles += 20;
+      break;
+    case 0x5E: // IM 2
+      cpu->im = 2;
+      cpu->cycles += 8;
+      break;
+    case 0x5F: // LD A, R
+      loadLow(&cpu->af, cpu->r);
+      cpu->cycles += 9;
+      break;
+    case 0x60: // IN H, (C)
+      loadHigh(&cpu->hl, InputHandler(getLow(cpu->hl)));
+      cpu->cycles += 12;
+      break;
+    case 0x61: // OUT (C), H
+      OutputHandler(getLow(cpu->hl), getHigh(cpu->hl));
+      cpu->cycles += 12;
+      break;
+    case 0x62: // SBC HL, HL
+      alu16(cpu, &cpu->hl, cpu->hl, ALU_OP_SBC);
+      cpu->cycles += 15;
+      break;
+    case 0x63: // LD (nn), HL
+      addr = fWord(cpu);
+      cpu->memory[addr] = getLow(cpu->hl);
+      cpu->memory[addr + 1] = getHigh(cpu->hl);
+      cpu->cycles += 20;
+      break;
+    case 0x66: // IM 0
+      cpu->im = 0;
+      cpu->cycles += 8;
+      break;
+    case 0x67: // RRD
+      cpu->memory[cpu->hl] = (cpu->memory[cpu->hl] >> 4) | (cpu->memory[cpu->hl] << 4);
+      cpu->cycles += 18;
+      break;
+    case 0x68: // IN L, (C)
+      loadHigh(&cpu->hl, InputHandler(getLow(cpu->hl)));
+      cpu->cycles += 12;
+      break;
+    case 0x69: // OUT (C), L
+      OutputHandler(getLow(cpu->hl), getHigh(cpu->hl));
+      cpu->cycles += 12;
+      break;
+    case 0x6A: // ADC HL, HL
+      alu16(cpu, &cpu->hl, cpu->hl, ALU_OP_ADC);
+      cpu->cycles += 15;
+      break;
+    case 0x6B: // LD HL, (nn)
+      addr = fWord(cpu);
+      cpu->hl = cpu->memory[addr];
+      cpu->hl |= cpu->memory[addr + 1] << 8;
+      cpu->cycles += 20;
+      break;
+    case 0x6F: // RLD
+      cpu->memory[cpu->hl] = (cpu->memory[cpu->hl] << 4) | (cpu->memory[cpu->hl] >> 4);
+      cpu->cycles += 18;
+      break;
+    case 0x70: // IN (C)
+      InputHandler(getLow(cpu->hl));
+      cpu->cycles += 12;
+      break;
+    case 0x71: // OUT (C), 0
+      OutputHandler(getLow(cpu->hl), 0);
+      cpu->cycles += 12;
+      break;
+    case 0x72: // SBC HL, SP
+      alu16(cpu, &cpu->hl, cpu->sp, ALU_OP_SBC);
+      cpu->cycles += 15;
+      break;
+    case 0x73: // LD (nn), SP
+      addr = fWord(cpu);
+      cpu->memory[addr] = getLow(cpu->sp);
+      cpu->memory[addr + 1] = getHigh(cpu->sp);
+      cpu->cycles += 20;
+      break;
+    case 0x78: // IN A, (C)
+      loadHigh(&cpu->af, InputHandler(getLow(cpu->af)));
+      cpu->cycles += 12;
+      break;
+    case 0x79: // OUT (C), A
+      OutputHandler(getLow(cpu->af), getHigh(cpu->af));
+      cpu->cycles += 12;
+      break;
+    case 0x7A: // ADC HL, SP
+      alu16(cpu, &cpu->hl, cpu->sp, ALU_OP_ADC);
+      cpu->cycles += 15;
+      break;
+    case 0x7B: // LD SP, (nn)
+      addr = fWord(cpu);
+      cpu->sp = cpu->memory[addr];
+      cpu->sp |= cpu->memory[addr + 1] << 8;
+      cpu->cycles += 20;
+      break;
+    case 0xA0: // LDI
+      cpu->memory[cpu->de] = cpu->memory[cpu->hl];
+      cpu->hl++;
+      cpu->de++;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xA1: // CPI
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
+      cpu->hl++;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xA2: // INI
+      cpu->memory[cpu->hl] = InputHandler(getLow(cpu->c));
+      cpu->hl++;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xA3: // OUTI
+      OutputHandler(getLow(cpu->c), cpu->memory[cpu->hl]);
+      cpu->hl++;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xA8: // LDD
+      cpu->memory[cpu->de] = cpu->memory[cpu->hl];
+      cpu->hl--;
+      cpu->de--;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xA9: // CPD
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
+      cpu->hl--;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xAA: // IND
+      cpu->memory[cpu->hl] = InputHandler(getLow(cpu->c));
+      cpu->hl--;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xAB: // OUTD
+      OutputHandler(getLow(cpu->c), cpu->memory[cpu->hl]);
+      cpu->hl--;
+      cpu->bc--;
+      if (cpu->bc == 0) {
+        cpu->af |= FLAG_P;
+      } else cpu->af &= ~FLAG_P;
+      cpu->cycles += 16;
+      break;
+    case 0xB0: // LDIR
+      while (cpu->bc > 0) {
+        cpu->memory[cpu->de] = cpu->memory[cpu->hl];
+        cpu->hl++;
+        cpu->de++;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xB1: // CPIR
+      temp1 = getHigh(cpu->af);
+      while (cpu->bc > 0) {
+        alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
+        cpu->hl++;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xB2: // INIR
+      while (cpu->bc > 0) {
+        cpu->memory[cpu->hl] = InputHandler(getLow(cpu->c));
+        cpu->hl++;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xB3: // OTIR
+      while (cpu->bc > 0) {
+        OutputHandler(getLow(cpu->c), cpu->memory[cpu->hl]);
+        cpu->hl++;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xB8: // LDDR
+      while (cpu->bc > 0) {
+        cpu->memory[cpu->de] = cpu->memory[cpu->hl];
+        cpu->hl--;
+        cpu->de--;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xB9: // CPDR
+      temp1 = getHigh(cpu->af);
+      while (cpu->bc > 0) {
+        alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
+        cpu->hl--;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xBA: // INDR
+      while (cpu->bc > 0) {
+        cpu->memory[cpu->hl] = InputHandler(getLow(cpu->c));
+        cpu->hl--;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    case 0xBB: // OTDR
+      while (cpu->bc > 0) {
+        OutputHandler(getLow(cpu->c), cpu->memory[cpu->hl]);
+        cpu->hl--;
+        cpu->bc--;
+        if (cpu->bc == 0) {
+          cpu->af |= FLAG_P;
+        } else cpu->af &= ~FLAG_P;
+        cpu->cycles += 16;
+      }
+      break;
+    default:
+      cpu->cycles += 4;
+      break;
   }
 }
 
 void BitInstruction(VirtZ80 *cpu) {
+  uint8_t opcode = fByte(cpu);
+  uint8_t temp1 = 0;
+  switch (opcode) {
+    case 0x00: // RLC B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x01: // RLC C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x02: // RLC D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x03: // RLC E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x04: // RLC H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x05: // RLC L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x06: // RLC (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_RLC);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x07: // RLC A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_RLC);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x08: // RRC B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x09: // RRC C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x0A: // RRC D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x0B: // RRC E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x0C: // RRC H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x0D: // RRC L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x0E: // RRC (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_RRC);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x0F: // RRC A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_RRC);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x10: // RL B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x11: // RL C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x12: // RL D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x13: // RL E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x14: // RL H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x15: // RL L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x16: // RL (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_RL);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x17: // RL A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_RL);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x18: // RR B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x19: // RR C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x1A: // RR D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x1B: // RR E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x1C: // RR H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x1D: // RR L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x1E: // RR (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_RR);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x1F: // RR A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_RR);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
 
+    case 0x20: // SLA B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x21: // SLA C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x22: // SLA D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x23: // SLA E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x24: // SLA H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x25: // SLA L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x26: // SLA (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_SLA);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x27: // SLA A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_SLA);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0x28: // SRA B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x29: // SRA C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x2A: // SRA D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x2B: // SRA E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x2C: // SRA H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x2D: // SRA L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x2E: // SRA (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_SRA);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x2F: // SRA A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_SRA);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0x38: // SRL B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x39: // SRL C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x3A: // SRL D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x3B: // SRL E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x3C: // SRL H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x3D: // SRL L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x3E: // SRL (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_SRL);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 16;
+      break;
+    case 0x3F: // SRL A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &cpu->temp1, 0, ALU_OP_SRL);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x40: // BIT 0, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x41: // BIT 0, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x42: // BIT 0, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x43: // BIT 0, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x44: // BIT 0, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x45: // BIT 0, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x46: // BIT 0, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x47: // BIT 0, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x48: // BIT 1, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x49: // BIT 1, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x4A: // BIT 1, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x4B: // BIT 1, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x4C: // BIT 1, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x4D: // BIT 1, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x4E: // BIT 1, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x4F: // BIT 1, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 1, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x50: // BIT 2, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x51: // BIT 2, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x52: // BIT 2, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x53: // BIT 2, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x54: // BIT 2, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x55: // BIT 2, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x56: // BIT 2, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x57: // BIT 2, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 2, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x58: // BIT 3, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x59: // BIT 3, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x5A: // BIT 3, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x5B: // BIT 3, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x5C: // BIT 3, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x5D: // BIT 3, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x5E: // BIT 3, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x5F: // BIT 3, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 3, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x60: // BIT 4, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x61: // BIT 4, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x62: // BIT 4, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x63: // BIT 4, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x64: // BIT 4, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x65: // BIT 4, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x66: // BIT 4, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x67: // BIT 4, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 4, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x68: // BIT 5, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x69: // BIT 5, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x6A: // BIT 5, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x6B: // BIT 5, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x6C: // BIT 5, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x6D: // BIT 5, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x6E: // BIT 5, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x6F: // BIT 5, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 5, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x70: // BIT 6, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x71: // BIT 6, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x72: // BIT 6, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x73: // BIT 6, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x74: // BIT 6, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x75: // BIT 6, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x76: // BIT 6, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x77: // BIT 6, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 6, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    
+    case 0x78: // BIT 7, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x79: // BIT 7, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x7A: // BIT 7, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x7B: // BIT 7, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x7C: // BIT 7, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x7D: // BIT 7, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+    case 0x7E: // BIT 7, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 12;
+      break;
+    case 0x7F: // BIT 7, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 7, ALU_OP_BIT);
+      cpu->cycles += 8;
+      break;
+
+    case 0x80: // RES 0, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x81: // RES 0, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x82: // RES 0, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x83: // RES 0, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x84: // RES 0, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x85: // RES 0, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x86: // RES 0, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0x87: // RES 0, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0x88: // RES 1, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x89: // RES 1, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x8A: // RES 1, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x8B: // RES 1, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x8C: // RES 1, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x8D: // RES 1, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x8E: // RES 1, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0x8F: // RES 1, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 1, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0x90: // RES 2, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x91: // RES 2, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x92: // RES 2, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x93: // RES 2, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x94: // RES 2, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x95: // RES 2, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x96: // RES 2, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0x97: // RES 2, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 2, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0x98: // RES 3, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x99: // RES 3, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x9A: // RES 3, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x9B: // RES 3, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x9C: // RES 3, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x9D: // RES 3, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0x9E: // RES 3, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0x9F: // RES 3, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 3, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xA0: // RES 4, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA1: // RES 4, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA2: // RES 4, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA3: // RES 4, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA4: // RES 4, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA5: // RES 4, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA6: // RES 4, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xA7: // RES 4, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 4, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xA8: // RES 5, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xA9: // RES 5, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xAA: // RES 5, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xAB: // RES 5, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xAC: // RES 5, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xAD: // RES 5, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xAE: // RES 5, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xAF: // RES 5, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 5, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    
+    case 0xB0: // RES 6, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB1: // RES 6, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB2: // RES 6, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB3: // RES 6, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB4: // RES 6, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB5: // RES 6, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB6: // RES 6, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xB7: // RES 6, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 6, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+    
+    case 0xB8: // RES 7, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xB9: // RES 7, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xBA: // RES 7, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xBB: // RES 7, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xBC: // RES 7, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xBD: // RES 7, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xBE: // RES 7, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xBF: // RES 7, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 7, ALU_OP_RES);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xC0: // SET 0, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC1: // SET 0, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC2: // SET 0, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC3: // SET 0, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC4: // SET 0, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC5: // SET 0, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC6: // SET 0, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xC7: // SET 0, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 0, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xC8: // SET 1, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xC9: // SET 1, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xCA: // SET 1, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xCB: // SET 1, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xCC: // SET 1, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xCD: // SET 1, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xCE: // SET 1, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xCF: // SET 1, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 1, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xD0: // SET 2, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD1: // SET 2, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD2: // SET 2, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD3: // SET 2, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD4: // SET 2, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD5: // SET 2, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD6: // SET 2, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xD7: // SET 2, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 2, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xD8: // SET 3, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xD9: // SET 3, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xDA: // SET 3, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xDB: // SET 3, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xDC: // SET 3, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xDD: // SET 3, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xDE: // SET 3, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xDF: // SET 3, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 3, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xE0: // SET 4, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE1: // SET 4, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE2: // SET 4, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE3: // SET 4, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE4: // SET 4, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE5: // SET 4, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE6: // SET 4, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xE7: // SET 4, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 4, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xE8: // SET 5, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xE9: // SET 5, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xEA: // SET 5, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xEB: // SET 5, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xEC: // SET 5, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xED: // SET 5, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xEE: // SET 5, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xEF: // SET 5, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 5, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xF0: // SET 6, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF1: // SET 6, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF2: // SET 6, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF3: // SET 6, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF4: // SET 6, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF5: // SET 6, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF6: // SET 6, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xF7: // SET 6, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 6, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    case 0xF8: // SET 7, B
+      temp1 = getHigh(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadHigh(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xF9: // SET 7, C
+      temp1 = getLow(cpu->bc);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadLow(&cpu->bc, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xFA: // SET 7, D
+      temp1 = getHigh(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadHigh(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xFB: // SET 7, E
+      temp1 = getLow(cpu->de);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadLow(&cpu->de, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xFC: // SET 7, H
+      temp1 = getHigh(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadHigh(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xFD: // SET 7, L
+      temp1 = getLow(cpu->hl);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadLow(&cpu->hl, temp1);
+      cpu->cycles += 8;
+      break;
+    case 0xFE: // SET 7, (HL)
+      temp1 = cpu->memory[cpu->hl];
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      cpu->memory[cpu->hl] = temp1;
+      cpu->cycles += 12;
+      break;
+    case 0xFF: // SET 7, A
+      temp1 = getHigh(cpu->af);
+      alu8(cpu, &temp1, 7, ALU_OP_SET);
+      loadHigh(&cpu->af, temp1);
+      cpu->cycles += 8;
+      break;
+
+    default:
+      return;
+    
 }
 
 void printState(VirtZ80 *cpu) {
