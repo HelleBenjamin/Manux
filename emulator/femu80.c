@@ -4,7 +4,7 @@
 
 void execute(VirtZ80 *cpu) {
   while (!cpu->halt) {
-    if (cpu->pc >= 0x1000 && cpu->pc < 0xb000) break;
+    if (cpu->pc >= 0x0100 && cpu->pc < 0xb000) break;
     cpu->r += 1;
     printState(cpu);
     printf("Instruction: 0x%02x\n", cpu->memory[cpu->pc]);
@@ -48,9 +48,9 @@ void exchange(uint16_t *reg1, uint16_t *reg2) {
 }
 
 void push(VirtZ80 *cpu, uint16_t value) {
-  cpu->sp--;
+  cpu->sp -= 1;
   cpu->memory[cpu->sp] = value >> 8;
-  cpu->sp--;
+  cpu->sp -= 1;
   cpu->memory[cpu->sp] = value & 0xFF;
 }
 
@@ -135,24 +135,62 @@ void alu8(VirtZ80 *cpu, uint8_t* dest, uint8_t value, uint8_t ins) {
 
     case ALU_OP_RLC:
       result = (*dest << 1) | (*dest >> 7);
+      updateFlags8(cpu, result);
       break;
     case ALU_OP_RRC:
       result = (*dest >> 1) | (*dest << 7);
+      updateFlags8(cpu, result);
       break;
     case ALU_OP_RL:
-      result = (*dest << 1) | getFlag(cpu, FLAG_C);
+    {
+      uint8_t carry = getFlag(cpu, FLAG_C);
+      result = (*dest << 1) | carry;
+      if (*dest & 0x80) {
+        cpu->af |= FLAG_C;
+      } else {
+        cpu->af &= ~FLAG_C;
+      }
+      updateFlags8(cpu, result);
       break;
+    }
     case ALU_OP_RR:
-      result = (*dest >> 1) | getFlag(cpu, FLAG_C) << 7;
+    {
+      uint8_t carry = getFlag(cpu, FLAG_C);
+      result = (*dest >> 1) | (carry << 7);
+      if (*dest & 0x01) {
+        cpu->af |= FLAG_C;
+      } else {
+        cpu->af &= ~FLAG_C;
+      }
+      updateFlags8(cpu, result);
       break;
+    }
     case ALU_OP_SLA:
       result = (*dest << 1);
+      if (*dest & 0x80) {
+        cpu->af |= FLAG_C;
+      } else {
+        cpu->af &= ~FLAG_C;
+      }
+      updateFlags8(cpu, result);
       break;
     case ALU_OP_SRA:
       result = (*dest >> 1) | (*dest & 0x80);
+      if (*dest & 0x01) {
+        cpu->af |= FLAG_C;
+      } else {
+        cpu->af &= ~FLAG_C;
+      }
+      updateFlags8(cpu, result);
       break;
     case ALU_OP_SRL:
       result = (*dest >> 1);
+      if (*dest & 0x01) {
+        cpu->af |= FLAG_C;
+      } else {
+        cpu->af &= ~FLAG_C;
+      }
+      updateFlags8(cpu, result);
       break;
 
     case ALU_OP_BIT:
@@ -178,7 +216,7 @@ void alu16(VirtZ80 *cpu, uint16_t* dest, uint16_t value, uint8_t ins) {
   if (!dest) {
     return;
   }
-  uint32_t result = 0;
+  int32_t result = 0;
   switch (ins) {
     case ALU_OP_ADD:
       result = *dest + value;
@@ -204,7 +242,7 @@ void alu16(VirtZ80 *cpu, uint16_t* dest, uint16_t value, uint8_t ins) {
   }
 
   updateFlags16(cpu, result);
-  *dest = result;
+  *dest = (result & 0xFFFF);
 }
 
 void MainInstruction(VirtZ80 *cpu) {
@@ -262,7 +300,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 7;
       break;
     case 0x0B: // DEC BC
-      cpu->bc--;
+      cpu->bc -= 1;
       cpu->cycles += 6;
       break;
     case 0x0C: // INC C
@@ -307,7 +345,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 7;
       break;
     case 0x13: // INC DE
-      cpu->de++;
+      cpu->de += 1;
       cpu->cycles += 6;
       break;
     case 0x14: // INC D
@@ -346,7 +384,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 7;
       break;
     case 0x1B: // DEC DE
-      cpu->de--;
+      cpu->de -= 1;
       cpu->cycles += 6;
       break;
     case 0x1C: // INC E
@@ -372,7 +410,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 4;
       break;
     case 0x20: // JR NZ, d
-      temp1 = fByte(cpu);
+      temp1 = (int8_t)fByte(cpu);
       if (getFlag(cpu, FLAG_Z) == 0) {
         cpu->pc += (int8_t)temp1;
         cpu->cycles += 12;
@@ -391,7 +429,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 16;
       break;
     case 0x23: // INC HL
-      cpu->hl++;
+      cpu->hl += 1;
       cpu->cycles += 6;
       break;
     case 0x24: // INC H
@@ -415,7 +453,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 4;
       break;
     case 0x28: // JR Z, d
-      temp1 = fByte(cpu);
+      temp1 = (int8_t)fByte(cpu);
       if (getFlag(cpu, FLAG_Z) == 1) {
         cpu->pc += (int8_t)temp1;
         cpu->cycles += 12;
@@ -434,7 +472,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 16;
       break;
     case 0x2B: // DEC HL
-      cpu->hl--;
+      cpu->hl -= 1;
       cpu->cycles += 6;
       break;
     case 0x2C: // INC L
@@ -460,7 +498,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 4;
       break;
     case 0x30: // JR NC, d
-      temp1 = fByte(cpu);
+      temp1 = (int8_t)fByte(cpu);
       if (getFlag(cpu, FLAG_C) == 0) {
         cpu->pc += (int8_t)temp1;
         cpu->cycles += 12;
@@ -478,7 +516,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 13;
       break;
     case 0x33: // INC SP
-      cpu->sp++;
+      cpu->sp += 1;
       cpu->cycles += 6;
       break;
     case 0x34: // INC (HL)
@@ -502,7 +540,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 4;
       break;
     case 0x38: // JR C, d
-      temp1 = fByte(cpu);
+      temp1 = (int8_t)fByte(cpu);
       if (getFlag(cpu, FLAG_C) == 1) {
         cpu->pc += (int8_t)temp1;
         cpu->cycles += 12;
@@ -520,7 +558,7 @@ void MainInstruction(VirtZ80 *cpu) {
       cpu->cycles += 13;
       break;
     case 0x3B: // DEC SP
-      cpu->sp--;
+      cpu->sp -= 1;
       cpu->cycles += 6;
       break;
     case 0x3C: // INC A
@@ -1767,9 +1805,9 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xA0: // LDI
       cpu->memory[cpu->de] = cpu->memory[cpu->hl];
-      cpu->hl++;
-      cpu->de++;
-      cpu->bc--;
+      cpu->hl += 1;
+      cpu->de += 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1778,8 +1816,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xA1: // CPI
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
-      cpu->hl++;
-      cpu->bc--;
+      cpu->hl += 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1787,8 +1825,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xA2: // INI
       cpu->memory[cpu->hl] = InputHandler(getLow(cpu->bc));
-      cpu->hl++;
-      cpu->bc--;
+      cpu->hl += 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1796,8 +1834,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xA3: // OUTI
       OutputHandler(getLow(cpu->bc), cpu->memory[cpu->hl]);
-      cpu->hl++;
-      cpu->bc--;
+      cpu->hl += 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1805,9 +1843,9 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xA8: // LDD
       cpu->memory[cpu->de] = cpu->memory[cpu->hl];
-      cpu->hl--;
-      cpu->de--;
-      cpu->bc--;
+      cpu->hl -= 1;
+      cpu->de -= 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1816,8 +1854,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xA9: // CPD
       temp1 = getHigh(cpu->af);
       alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
-      cpu->hl--;
-      cpu->bc--;
+      cpu->hl -= 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1825,8 +1863,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xAA: // IND
       cpu->memory[cpu->hl] = InputHandler(getLow(cpu->bc));
-      cpu->hl--;
-      cpu->bc--;
+      cpu->hl -= 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1834,8 +1872,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       break;
     case 0xAB: // OUTD
       OutputHandler(getLow(cpu->bc), cpu->memory[cpu->hl]);
-      cpu->hl--;
-      cpu->bc--;
+      cpu->hl -= 1;
+      cpu->bc -= 1;
       if (cpu->bc == 0) {
         cpu->af |= FLAG_P;
       } else cpu->af &= ~FLAG_P;
@@ -1854,8 +1892,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       temp1 = getHigh(cpu->af);
       while (cpu->bc > 0) {
         alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
-        cpu->hl++;
-        cpu->bc--;
+        cpu->hl += 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1865,8 +1903,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xB2: // INIR
       while (cpu->bc > 0) {
         cpu->memory[cpu->hl] = InputHandler(getLow(cpu->bc));
-        cpu->hl++;
-        cpu->bc--;
+        cpu->hl += 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1876,8 +1914,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xB3: // OTIR
       while (cpu->bc > 0) {
         OutputHandler(getLow(cpu->bc), cpu->memory[cpu->hl]);
-        cpu->hl++;
-        cpu->bc--;
+        cpu->hl += 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1887,9 +1925,9 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xB8: // LDDR
       while (cpu->bc > 0) {
         cpu->memory[cpu->de] = cpu->memory[cpu->hl];
-        cpu->hl--;
-        cpu->de--;
-        cpu->bc--;
+        cpu->hl -= 1;
+        cpu->de -= 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1900,8 +1938,8 @@ void MiscInstruction(VirtZ80 *cpu) {
       temp1 = getHigh(cpu->af);
       while (cpu->bc > 0) {
         alu8(cpu, &temp1, cpu->memory[cpu->hl], ALU_OP_CP);
-        cpu->hl--;
-        cpu->bc--;
+        cpu->hl -= 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1911,8 +1949,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xBA: // INDR
       while (cpu->bc > 0) {
         cpu->memory[cpu->hl] = InputHandler(getLow(cpu->bc));
-        cpu->hl--;
-        cpu->bc--;
+        cpu->hl -= 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -1922,8 +1960,8 @@ void MiscInstruction(VirtZ80 *cpu) {
     case 0xBB: // OTDR
       while (cpu->bc > 0) {
         OutputHandler(getLow(cpu->bc), cpu->memory[cpu->hl]);
-        cpu->hl--;
-        cpu->bc--;
+        cpu->hl -= 1;
+        cpu->bc -= 1;
         if (cpu->bc == 0) {
           cpu->af |= FLAG_P;
         } else cpu->af &= ~FLAG_P;
@@ -3417,8 +3455,8 @@ void IxInstruction(VirtZ80 *cpu) {
       break;
     case 0x22: // LD (nn), IX
       addr = fWord(cpu);
-      cpu->memory[addr] = getHigh(cpu->ix);
-      cpu->memory[addr + 1] = getLow(cpu->ix);
+      cpu->memory[addr] = getLow(cpu->ix);
+      cpu->memory[addr + 1] = getHigh(cpu->ix);
       cpu->cycles += 20;
       break;
     case 0x23: // INC IX

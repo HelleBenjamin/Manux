@@ -1,0 +1,103 @@
+menu "Manux Kernel Configuration"
+
+    menu "Memory Configuration"
+
+
+        config RAM_START
+            hex "The address where the system ram starts"
+            default 0x8000
+            prompt "Set the system ram start address"
+            help
+            "The address where the system ram starts"
+        config KERNEL_RAM_START
+            hex "The address where the kernel ram starts"
+            default 0x8000
+            prompt "Set the kernel ram start address"
+            help
+            "The address where the kernel ram starts"
+
+        menu "Stack Configuration"
+            config STACK_SIZE
+                hex "The size of the kernel stack (B)"
+                default 0x1000
+                prompt "Set the kernel stack size"
+                help
+                "The size of the kernel stack"
+            config REGISTER_SP
+                hex "The Stack Pointer register"
+                default 0xA500
+                prompt "Set the Stack Pointer register"
+                help
+                "The Stack Pointer register"
+
+        endmenu
+        
+        menu "Heap Configuration"
+
+            config HEAP_SIZE
+                hex "The size of the kernel heap"
+                default 0x1000
+                prompt "Set the kernel heap size (B)"
+                help
+                "The size of the kernel heap"
+            config HEAP_ADDRESS
+                hex "The address of the kernel heap"
+                default 0x8000
+                prompt "Set the kernel heap address"
+                help
+                "The address of the kernel heap"
+
+        endmenu
+
+    endmenu
+    
+    menu "z88dk Options"
+        config ENABLE_STDIO
+            bool "Enable stdio"
+            default n
+            prompt "Enable z88dk's stdio"
+            help
+            "Enable z88dk's stdio"
+        config CRT_MODEL
+            hex "Data compression model"
+            default 3
+            prompt "Set the data compression model"
+            help
+            "Data compression model"
+        config CRT_INITIALIZE_BSS
+            bool "Initialize BSS"
+            default 0
+            prompt "Initialize BSS"
+            help
+            "Initialize BSS"
+
+    endmenu
+
+    menu "Kernel Options"
+        config KERNEL_ORG
+            hex "The address where the kernel starts"
+            default 0xB004
+            prompt "Set the kernel start address."
+            help
+            "The address where the kernel starts. Note: 4 bytes are reserved for syscall call vector."
+
+        config CLK_FREQ
+            hex "The clock frequency in Hz"
+            default 1000000
+            prompt "Set the clock frequency"
+            help
+            "The clock frequency in Hz"
+
+        config BASIC_START
+            bool
+            default n
+            prompt "Is the kernel loaded from BASIC?"
+            help
+            "Is the kernel loaded from BASIC?"
+
+        menu "Drivers"
+
+        endmenu
+    endmenu
+
+endmenu

@@ -17,14 +17,14 @@ COBJ = $(CSRC:%.c=build/%.o)
 CC_FLAGS = -SO2 -startup=3 -clib=classic
 
 # Another set of compile flags
-PDEF = -pragma-define:CRT_ORG_CODE=0xB004 \
-       -pragma-define:CRT_ORG_BSS=0xC000 \
-       -pragma-define:CRT_MODEL=3 \
-       -pragma-define:REGISTER_SP=0xA500 \
-       -pragma-define:STACK_SIZE=4096 \
-       -pragma-define:CRT_INITIALIZE_BSS=0 \
-			 -pragma-define:CRT_ENABLE_STDIO=0 \
-			 -pragma-include:kernel/kernel.inc
+PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
+       	-pragma-define:CRT_ORG_BSS=0xC000 \
+       	-pragma-define:CRT_MODEL=3 \
+       	-pragma-define:REGISTER_SP=0xA500 \
+       	-pragma-define:STACK_SIZE=4096 \
+       	-pragma-define:CRT_INITIALIZE_BSS=0 \
+	   	-pragma-define:CRT_ENABLE_STDIO=0 \
+	    -pragma-include:kernel/kernel.inc
 
 # Some files
 CRT0 = crt0.asm
