@@ -11,12 +11,26 @@ POSIX
 =====
 Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs. Currently the supported features are input/output, fork, and exec.
 
+Minimum system requirements
+====================
+- Z80 CPU
+- 8K RAM
+- a serial interface
+
 TODO
 ====
 Better kernel loader(like z80ld)
 
+Pre-requisites
+=============
+- z88dk
+- make
+- kconfig-frontends
+
+
 Building
 ========
+
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel. TODO: configuration script
 
 License
