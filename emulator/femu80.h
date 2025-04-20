@@ -67,9 +67,11 @@ void exchange(uint16_t *reg1, uint16_t *reg2);
 void push(VirtZ80 *cpu, uint16_t value);
 uint16_t pop(VirtZ80 *cpu);
 void printState(VirtZ80 *cpu);
+void stackTrace(VirtZ80 *cpu, int depth);
 
 void MainInstruction(VirtZ80 *cpu);
 void MiscInstruction(VirtZ80 *cpu);
 void BitInstruction(VirtZ80 *cpu);
+void IxInstruction(VirtZ80 *cpu);
 
 #endif
