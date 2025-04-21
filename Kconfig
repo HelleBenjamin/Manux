@@ -125,6 +125,13 @@ menu "Manux Kernel Configuration"
                 prompt "Set the TTY port"
                 help
                 "The TTY port"
+            config USE_RST
+                bool
+                default n
+                prompt "Use custom RST vectors"
+                help
+                "Use custom RST vectors to input/output"
+
         endmenu
     endmenu
 

@@ -7,6 +7,7 @@ SECTION CODE
   EXTERN crt0_init_bss
   EXTERN _OS_ENTRY
   EXTERN SYSCALL_DISPATCH
+  EXTERN INIT_TTY
 
   PUBLIC KERNEL_ENTRY
 
@@ -45,6 +46,9 @@ KERNEL_ENTRY:
   PUSH HL ; Save old sp
   LD (KERNEL_SP), SP ; Save kernel sp, this also saves the old sp
 
+  ; Initialize drivers
+  CALL INIT_TTY
+
   ; Load syscall handler address
   LD HL, $B000
   LD DE, SYSCALL_DISPATCH
@@ -62,7 +66,7 @@ KERNEL_ENTRY:
   LD HL, KERNEL_FLAGS
   LD (HL), 0 ; Initialize all to 0
   SET 0, (HL) ; Set echo
-  RES 1, (HL) ; Set kernel mode(0)
+  RES 1, (HL) ; Set kernel mode, 0
 
   ; Create process stack at 0xAF00
   LD HL, PROCESS_STACK
@@ -106,14 +110,12 @@ KERNEL_ENTRY:
 ROOT_PROCESS:
 
   ; Create OS process
-
   LD A, 9
   CALL $B000 ; Fork
 
   LD HL, _OS_ENTRY
   LD A, 5
   CALL $B000 ; And execute
-
 
   ; Exit
   LD BC, 0

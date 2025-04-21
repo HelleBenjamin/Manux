@@ -6,13 +6,14 @@ SECTION CODE
   
   PUBLIC SYSCALL_DISPATCH
 
-  EXTERN PRINTC
-  EXTERN READC
   EXTERN EXIT_PROCESS
   EXTERN CREATE_PROCESS
   EXTERN GET_PROCESS_ID
   EXTERN PUSH_PROCESS
   EXTERN POP_PROCESS
+
+  EXTERN TRANSMIT_CHAR
+  EXTERN RECEIVE_CHAR
 
 ; Important! System calls must be called from user mode
 ; System Call Argument registers:
@@ -26,7 +27,7 @@ SECTION CODE
 ;
 ; 0x00 - SYS_EXIT
 ;   BC = Exit code
-;   Description: Exit to BASIC
+;   Description: Exit current process
 ;
 ; 0x01 - SYS_WRITE
 ;   BC = port
@@ -151,7 +152,7 @@ ECHO_CHAR:
   LD HL, KERNEL_FLAGS
   BIT 0, (HL) ; Check if echo is enabled
   POP HL
-  CALL NZ, PRINTC ; If enabled print
+  CALL NZ, TRANSMIT_CHAR ; If enabled print
   RET
 
 SYS_EXIT:
@@ -202,7 +203,7 @@ SYS_GETS:
     DEC E
     JR Z, L_8 ; Loop ends when length = 0
     L_6_1:
-    CALL READC
+    CALL RECEIVE_CHAR
     CALL ECHO_CHAR
     CP 0x0D ; Check for enter
     JR Z, L_8 ; If enter, the string is ready
@@ -235,7 +236,7 @@ SYS_PUTS:
     JR Z, L_11 ; Loop ends when length = 0
     L_9_1:
     LD A, (HL)
-    CALL PRINTC
+    CALL TRANSMIT_CHAR
     INC HL
     JR L_9
   L_10: ; Dec D

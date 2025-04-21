@@ -25,7 +25,7 @@ Pre-requisites
 =============
 - z88dk
 - make
-- kconfig-frontends
+- kconfig-frontends-nox
 
 
 Building
