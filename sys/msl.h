@@ -26,4 +26,7 @@ void memcmp(void *dest, void *src, int size);
 int strcmp(const char *s1, const char *s2);
 int strlen(const char *s);
 
+int putchar(int c);
+int puts(const char *s);
+
 #endif

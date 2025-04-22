@@ -1,5 +1,8 @@
 ; SPDX-License-Identifier: GPL-2.0-or-later
 ; Copyright (c) 2025 Benjamin Helle
+;
+; kmain.asm
+; Assembly kernel for Manux
 
 SECTION CODE  
   ORG $B004

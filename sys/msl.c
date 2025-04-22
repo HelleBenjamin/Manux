@@ -5,21 +5,13 @@
 
 void memset(void *dest, int value, int size) {
   asm(
-    "ld hl, 2\n"
-    "add hl, sp\n"
-    "ld e, (hl)\n" // Get size, de
-    "inc hl\n"
-    "ld d, (hl)\n"
-    "inc hl\n"
-    "push de\n"
-    "ld c, (hl)\n" // Get value, bc
-    "inc hl\n"
-    "ld b, (hl)\n"
-    "inc hl\n"
-    "ld e, (hl)\n" // Get dest, hl
-    "inc hl\n"
-    "ld d, (hl)\n"
-    "pop hl\n"
+    "call _getparams3\n"
+    "ex de, hl\n" // DE = size
+    "push hl\n"
+    "push bc\n"
+    "pop hl\n" // HL = dest
+    "pop bc\n" // BC = value
+
     "push af\n"
     "xor a\n"
     "memset_loop:\n"
@@ -30,4 +22,45 @@ void memset(void *dest, int value, int size) {
     "jp nz, memset_loop\n"
     "pop af"
   );
+}
+
+void memcpy(void *dest, void *src, int size) {
+  asm(
+    "call _getparams3\n"
+    "push hl\n"
+    "push de\n"
+    "push bc\n"
+    "pop de\n" // DE = dest
+    "pop hl\n" // HL = src
+    "pop bc\n" // BC = size
+    "ldir\n" // Simple as it gets, just a single instruction
+  );
+}
+
+void memcmp(void *dest, void *src, int size) {
+  asm(
+    "call _getparams3\n"
+    "push hl\n"
+    "push de\n"
+    "push bc\n"
+    "pop de\n" // DE = dest
+    "pop hl\n" // HL = src
+    "pop bc\n" // BC = size
+    "memcmp_loop:\n"
+    "ld a, (de)\n"
+    "cpi"
+    "inc de\n"
+    "jp pe, memcmp loop_loop\n"
+  );
+}
+
+int putchar(char c) {
+  sysc_puts(1, &c);
+  return c;
+}
+
+int puts(const char *s) {
+  short len = strlen(s);
+  sysc_puts(len, s);
+  return len;
 }
