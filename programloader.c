@@ -48,12 +48,12 @@ int main(int argc, char **argv) {
 
 
   int line = 10;
-  int addr = 0xF000;
+  int addr = 0xB004;
   int size = file_size;
   fprintf(output, "0 REM BASIC HEX LOADER FOR Z80, SIZE: %d\n", size);
   fprintf(output, "1 POKE &H8048, &HC3\n");
-  fprintf(output, "2 POKE &H8049, &H00\n");
-  fprintf(output, "3 POKE &H804A, &HF0\n");
+  fprintf(output, "2 POKE &H8049, &H04\n");
+  fprintf(output, "3 POKE &H804A, &HB0\n");
   fprintf(output, "4 FOR I = &H%04x TO &H%04x\n", addr, addr+size-1);
   fprintf(output, "5 READ A\n");
   fprintf(output, "6 POKE I, A\n");
