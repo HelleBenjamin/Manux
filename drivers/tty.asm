@@ -54,7 +54,7 @@ RECEIVE_CHAR:
   ; A = char
   IN A, ($81)
   OR A
-  JP Z, RECEIVE_CHAR ; Wait for char
+  JR Z, RECEIVE_CHAR ; Wait for char
   RET
 
 INIT_TTY:

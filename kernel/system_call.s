@@ -95,6 +95,7 @@ SYSCALL_DISPATCH:
   POP HL
 
   ; Check if syscall is valid. We always want to check if something is valid with a jump table.
+  ; Fix this :)
   ;PUSH HL
   ;LD HL, SYSCALL_COUNT
   ;CP (HL)
@@ -126,6 +127,7 @@ SYSCALL_DISPATCH:
   ADD IX, DE ; IX = syscall address
   POP DE
 
+  ; It would be better to use HL instead of IX for speed, will be added later. Or just push the address to the stack and use ret
   JP (IX) ; Execute the syscall
 
 

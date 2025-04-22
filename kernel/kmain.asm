@@ -22,6 +22,7 @@ SECTION CODE
   ; bit 6 - unused
   ; bit 7 - unused
 
+  ; TODO: Rework the memory
   ; Memory map
   ; ----------
   ; | 0xFFFF |
