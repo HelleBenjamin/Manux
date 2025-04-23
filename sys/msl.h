@@ -28,5 +28,6 @@ int strlen(const char *s);
 
 int putchar(int c);
 int puts(const char *s);
+char getchar(void);
 
 #endif

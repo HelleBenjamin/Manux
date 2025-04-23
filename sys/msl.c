@@ -54,6 +54,25 @@ void memcmp(void *dest, void *src, int size) {
   );
 }
 
+int strcmp(const char *s1, const char *s2) {
+  while (*s1 == *s2) {
+    if (*s1 == '\0') {
+      return 0;
+    }
+    s1++;
+    s2++;
+  }
+  return 1;
+}
+
+int strlen(const char *s) {
+  int len = 0;
+  while (s[len] != '\0') {
+    len++;
+  }
+  return len;
+}
+
 int putchar(char c) {
   sysc_puts(1, &c);
   return c;
@@ -63,4 +82,10 @@ int puts(const char *s) {
   short len = strlen(s);
   sysc_puts(len, s);
   return len;
+}
+
+char getchar(void) {
+  char *c = '\0';
+  sysc_gets(1, c);
+  return *c;
 }

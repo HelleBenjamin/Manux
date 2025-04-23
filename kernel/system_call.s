@@ -110,33 +110,38 @@ SYSCALL_DISPATCH:
   PUSH BC
   PUSH DE
   PUSH HL
-  PUSH IX
   
   ; Calculate address
   PUSH DE
   PUSH HL
-  LD IX, SYSCALL_TABLE
+  LD HL, SYSCALL_TABLE
   SLA A ; Multiply by 2
   LD D, 0
   LD E, A
-  ADD IX, DE ; Calculated address in IX
-  PUSH IX
-  POP HL ; IX -> HL
+  ADD HL, DE ; Calculated address in HL
   LD E, (HL) ; Get the syscall address from HL pointer
   INC HL
   LD D, (HL) ; Now the address is in DE
-  POP HL
-  LD IX, 0
-  ADD IX, DE ; IX = syscall address
+  LD HL, 0
+  ADD HL, DE ; HL = syscall address
   POP DE
-
+  
   ; It would be better to use HL instead of IX for speed, will be added later. Or just push the address to the stack and use ret
-  JP (IX) ; Execute the syscall
+  JP (HL) ; Execute the syscall
 
+GET_HL_SYSCALL:
+  LD HL, 4
+  ADD HL, SP
+  PUSH DE
+  LD E, (HL)
+  INC HL
+  LD D, (HL)
+  EX DE, HL
+  POP DE
+  RET
 
 SYSCALL_END:
   ; Restore all registers
-  POP IX
   POP HL
   POP DE
   POP BC
@@ -165,102 +170,87 @@ SYS_EXIT:
   JP SYSCALL_END
 
 SYS_WRITE:
-  L_0: ; Main loop
+  CALL GET_HL_SYSCALL
+  SYS_WRITE_LOOP: ; Main loop
     XOR A
-    CP D
-    JR Z, L_1 ; While D > 0, decrement D
-    DEC E
-    JR Z, L_2 ; Loop ends when length = 0
-    L_0_1:
+    DEC DE
+    CP E
+    JR Z, SYS_WRITE_END ; Loop ends when length = 0
     LD A, (HL)
     OUT (C), A
     INC HL
-    JR L_0
-  L_1: ; Dec D
-    DEC D
-    JR L_0_1
-  L_2: ; End loop
+    JR SYS_WRITE_LOOP
+  SYS_WRITE_END: ; End loop
     JP SYSCALL_END
 
 SYS_READ:
-  L_3: ; Main loop
+  CALL GET_HL_SYSCALL
+  SYS_READ_LOOP: ; Main loop
     XOR A
-    CP D
-    JR Z, L_4 ; While D > 0, decrement D
-    DEC E
-    JR Z, L_5 ; Loop ends when length = 0
-    L_3_1:
+    DEC DE
+    CP E
+    JR Z, SYS_READ_END ; Loop ends when length = 0
     IN A, (C)
     LD (HL), A
     INC HL
-    JR L_3
-  L_4: ; Dec D
-    DEC D
-    JR L_3_1
-  L_5: ; End loop
+    JR SYS_READ_LOOP
+  SYS_READ_END: ; End loop
     JP SYSCALL_END
 
 SYS_GETS:
-  L_6: ; Main loop
+  CALL GET_HL_SYSCALL
+  SYS_GETS_LOOP: ; Main loop
     XOR A
-    CP D
-    JR Z, L_7 ; While D > 0, decrement D
-    DEC E
-    JR Z, L_8 ; Loop ends when length = 0
-    L_6_1:
+    DEC DE
+    CP E
+    JR Z, SYS_GETS_END ; Exit when DE is zero
     CALL RECEIVE_CHAR
     CALL ECHO_CHAR
     CP 0x0D ; Check for enter
-    JR Z, L_8 ; If enter, the string is ready
+    JR Z, SYS_GETS_END ; If enter, the string is ready
     LD (HL), A
     INC HL
     CP 0x7F
-    JR Z, L_7_1 ; Sometimes the terminal emulator is configured to output backspace as 0x7F(DEL in ascii)
+    JR Z, SYS_GETS_BCKSP ; Sometimes the terminal emulator is configured to output backspace as 0x7F(DEL in ascii)
     CP 0x08
-    JR Z, L_7_1 ; Default backspace
-    JR L_6
-  L_7: ; Dec D
-    DEC D
-    JR L_6_1
-  L_7_1: ; Handle backspace
+    JR Z, SYS_GETS_BCKSP ; Default backspace
+    JR SYS_GETS_LOOP
+  SYS_GETS_BCKSP: ; Handle backspace
     DEC HL
     DEC HL
     LD (HL), 0
     INC DE
-    JR L_6
-  L_8: ; End loop
+    JR SYS_GETS_LOOP
+  SYS_GETS_END: ; End loop
     JP SYSCALL_END
 
 
 SYS_PUTS:
-  L_9: ; Main loop
+  CALL GET_HL_SYSCALL
+  SYS_PUTS_LOOP: ; Main loop
     XOR A
-    CP D
-    JR Z, L_10 ; While D > 0, decrement D
-    DEC E
-    JR Z, L_11 ; Loop ends when length = 0
-    L_9_1:
+    DEC DE
+    CP E
+    JR Z, SYS_PUTS_END ; Loop ends when length = 0
     LD A, (HL)
     CALL TRANSMIT_CHAR
     INC HL
-    JR L_9
-  L_10: ; Dec D
-    DEC D
-    JR L_9_1
-  L_11: ; End loop
+    JR SYS_PUTS_LOOP
+  SYS_PUTS_END: ; End loop
     JP SYSCALL_END
 
 SYS_EXEC: ; Executes the program at the address in HL
 
-  PUSH HL
   LD HL, KERNEL_FLAGS
   SET 1, (HL)
-  POP HL
   LD SP, (USER_SP)
+
+  CALL GET_HL_SYSCALL
 
   JP (HL)
 
 SYS_GETINFO:
+  CALL GET_HL_SYSCALL
   EX DE, HL
   LD HL, SYSINFO
   LD BC, 40
@@ -268,6 +258,7 @@ SYS_GETINFO:
   JP SYSCALL_END
 
 SYS_RAND:
+  CALL GET_HL_SYSCALL
   LD A, R ; Get the random number from the refresh register
   LD (HL), A
   JP SYSCALL_END
@@ -276,15 +267,18 @@ SYS_SLEEP:
   JP SYSCALL_END
 
 SYS_FORK: ; Clones the process but does not execute
+  CALL GET_HL_SYSCALL
   CALL CREATE_PROCESS
   JP SYSCALL_END
 
 SYS_GETPID:
+  CALL GET_HL_SYSCALL
   CALL GET_PROCESS_ID
   LD (HL), A
   JP SYSCALL_END
 
 SYS_GETPCOUNT:
+  CALL GET_HL_SYSCALL
   LD A, (PROC_COUNT)
   LD (HL), A
   JP SYSCALL_END
