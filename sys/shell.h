@@ -4,6 +4,7 @@
 #ifndef SHELL_H
 #define SHELL_H
 
+void newline(void);
 void terminal();
 void main();
 void OS_ENTRY();

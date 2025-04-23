@@ -8,7 +8,7 @@ BUILDDIR = build
 
 # Sources
 KSRC = kernel/kmain.asm kernel/proc.asm kernel/system_call.s drivers/tty.asm
-CSRC = sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c
+CSRC = sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
 
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
@@ -33,7 +33,7 @@ OUTPUT = build/MANUX.bin
 
 # Make build directory
 build:
-	mkdir -p build/kernel build/drivers/io build/sys
+	mkdir -p build/kernel build/drivers/io build/sys build/include
 
 # Assembly files
 build/%.o: %.asm

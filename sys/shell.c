@@ -4,10 +4,16 @@
 #include "utsname.h"
 #include "syscall.h"
 #include <string.h>
+#include "../include/stdio.h"
 
 /*
   Simple shell for Manux. This provides minimal interface for the kernel.
 */
+
+void newline(void) {
+  write(STDOUT_FILENO, "\n\r", 2);
+}
+
 void print_uint(unsigned short n) {
   // Powers of ten (for up to 5 digits = max 65535)
   unsigned short powers[] = {10000, 1000, 100, 10, 1};
@@ -23,7 +29,7 @@ void print_uint(unsigned short n) {
 
       if (digit > 0 || started || i == 4) {
           char char_digit = '0' + digit;
-          write(STDOUT_FILENO, &char_digit, 1);
+          putchar(char_digit);
           started = 1;
       }
   }
@@ -52,7 +58,7 @@ void z80ld() {
   for (short i = 0; i < 0xFF; i++) {
     program[i] = hextobyte(&pg[i * 2]);
   }
-  write(STDOUT_FILENO, "\n\r", 2);
+  newline();
   fork(); // Unix fork
   sysc_exec((short *)0xF000); // Manux exec
 }
@@ -63,7 +69,7 @@ void terminal() {
     memset(command, 0, 32);
     write(STDOUT_FILENO, "> ", 2);
     read(STDIN_FILENO, &command, 32);
-    write(STDOUT_FILENO, "\n\r", 2);
+    newline();
     if (strcmp(command, "Z$") == 0) {
       ZHEX();
     } else if (strcmp(command, "exit") == 0) {
@@ -76,7 +82,7 @@ void terminal() {
       write(STDOUT_FILENO, utsname.release, 8);
       write(STDOUT_FILENO, utsname.version, 8);
       write(STDOUT_FILENO, utsname.machine, 8);
-      write(STDOUT_FILENO, "\n\r", 2);
+      newline();
     } else if (strcmp(command, "z80ld") == 0) {
       z80ld();
     } else if (strcmp(command, "clear") == 0) {
@@ -86,12 +92,12 @@ void terminal() {
       char process_id = 0;
       sysc_getpid(&process_id);
       print_uint(process_id);
-      write(STDOUT_FILENO, "\n\r", 2);
+      newline();
     } else if (strcmp(command, "pcount") == 0) {
       char process_count = 0;
       sysc_getpcount(&process_count);
       print_uint(process_count);
-      write(STDOUT_FILENO, "\n\r", 2);
+      newline();
     }
   }
 }
@@ -100,7 +106,7 @@ void main() {
   struct utsname sname;
   uname(&sname);
   write(STDOUT_FILENO, sname.sysname, 8);
-  write(STDOUT_FILENO, "\n\r", 2);
+  newline();
   fork();
   sysc_exec((short *)terminal);
   _exit(0);
@@ -138,7 +144,7 @@ void ZHEX() { // Z$ (Z-hex)
     }
     i++;
   }
-  write(STDOUT_FILENO, "\n\r", 2);
+  newline();
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>++>------>

@@ -5,6 +5,7 @@
     "syscall.h": "c",
     "unistd.h": "c",
     "utsname.h": "c",
-    "random": "c"
+    "random": "c",
+    "*.tcc": "c"
   }
 }

@@ -54,6 +54,9 @@ IF CRT_ORG_CODE = 0x0000
     INCLUDE "crt/classic/crt_z80_rsts.asm"
 ENDIF
 
+; TODO:
+; - Add custom fputc_const and other functions
+
 start:
     ;INCLUDE "crt/classic/crt_start_eidi.inc"
     ;INCLUDE "crt/classic/crt_init_sp.asm"

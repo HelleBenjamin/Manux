@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "msl.h"
+#include "syscall.h"
 
 /*Manux Standard Library*/
 
 void memset(void *dest, int value, int size) {
   asm(
+    "extern _getparams3\n"
+    "extern _getparams2\n"
     "call _getparams3\n"
     "ex de, hl\n" // DE = size
     "push hl\n"
@@ -20,7 +23,7 @@ void memset(void *dest, int value, int size) {
     "dec de\n"
     "cp e\n"
     "jp nz, memset_loop\n"
-    "pop af"
+    "pop af\n"
   );
 }
 
@@ -48,9 +51,9 @@ void memcmp(void *dest, void *src, int size) {
     "pop bc\n" // BC = size
     "memcmp_loop:\n"
     "ld a, (de)\n"
-    "cpi"
+    "cpi\n"
     "inc de\n"
-    "jp pe, memcmp loop_loop\n"
+    "jp nz, memcmp_loop\n"
   );
 }
 
@@ -78,7 +81,7 @@ int putchar(char c) {
   return c;
 }
 
-int puts(const char *s) {
+int puts(char *s) {
   short len = strlen(s);
   sysc_puts(len, s);
   return len;
