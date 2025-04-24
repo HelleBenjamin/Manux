@@ -18,7 +18,7 @@ SECTION CODE
   ; Kernel flags
   ; bit 0 - echo, should print text on gets
   ; bit 1 - mode, kernelmode (0) or usermode (1)
-  ; bit 2 - unused
+  ; bit 2 - booted, if the kernel has already booted
   ; bit 3 - unused
   ; bit 4 - unused
   ; bit 5 - unused
@@ -63,7 +63,7 @@ KERNEL_ENTRY:
   LD (HL), D ; Now the syscall address is at 0xB000
 
   ; Set syscall count
-  LD A, $09
+  LD A, $0B
   LD (SYSCALL_COUNT), A
 
   ; Load kernel flags
@@ -79,6 +79,9 @@ KERNEL_ENTRY:
   ; Create user stack at 0xA500
   LD HL, USER_STACK
   LD (USER_SP), HL
+
+  LD HL, PROC_COUNT
+  LD (HL), 0
 
   ; Load usermode
   PUSH HL

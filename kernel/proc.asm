@@ -76,7 +76,7 @@ PUSH_PROCESS:
 
   ; So the stack looks like this:
   ; AF (2 bytes), BC (2 bytes), DE (2 bytes), HL (2 bytes), SP (2 bytes), return address (2 bytes), PID (1 byte), exit code (1 byte)
-  ; Combined: 14 bytes
+  ; Size: 14 bytes
   
   LD SP, (TMP_REG2) ; Restore the old stack pointer
   RET

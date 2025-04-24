@@ -15,7 +15,7 @@ COBJ = $(CSRC:%.c=build/%.o)
 
 # Compile flags
 CC_FLAGS = +z80 -SO2 -startup=3 -clib=classic
-AS_FLAGS = -mz80
+AS_FLAGS = -mz80 -DUSE_RST=1 -DCLK_FREQ=1000
 
 # Another set of compile flags
 PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
@@ -26,6 +26,7 @@ PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
        	-pragma-define:CRT_INITIALIZE_BSS=0 \
 	   	-pragma-define:CRT_ENABLE_STDIO=0 \
 	    -pragma-include:kernel/kernel.inc \
+			-pragma-define:SYSCALL_VECTOR=0xB000 \
 
 # Some files
 CRT0 = crt0.asm
@@ -37,7 +38,7 @@ build:
 
 # Assembly files
 build/%.o: %.asm
-	$(AS) -DUSE_RST=1 $(AS_FLAGS) $< -o$@
+	$(AS) $(AS_FLAGS) $< -o$@
 
 # C files
 build/%.o: %.c

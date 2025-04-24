@@ -134,7 +134,6 @@ void sysc_getpid(char *buf) __z88dk_fastcall {
 
 void sysc_getpcount(char *buf) __z88dk_fastcall {
   asm(
-
     "ld a, 11\n"
     "call $B000"
   );

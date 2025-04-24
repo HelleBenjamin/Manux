@@ -59,8 +59,8 @@ void z80ld() {
     program[i] = hextobyte(&pg[i * 2]);
   }
   newline();
-  fork(); // Unix fork
-  sysc_exec((short *)0xF000); // Manux exec
+  fork();
+  sysc_exec((short *)0xF000);
 }
 
 void terminal() {
@@ -97,6 +97,9 @@ void terminal() {
       char process_count = 0;
       sysc_getpcount(&process_count);
       print_uint(process_count);
+      newline();
+    } else {
+      puts("Unknown command");
       newline();
     }
   }

@@ -80,13 +80,7 @@ SECTION CODE
 ; 0x0B - SYS_GETPCOUNT
 ;   HL - pointer to buffer
 ;   Description: Get process count
-; 0x0C - SYS_GETSYSMEM
-;   HL - pointer to buffer
-;   Description: Get whole system memory, like memtest
 ;
-; 0x0D - SYS_GETUSEDMEM
-;   HL - pointer to buffer
-;   Description: Get used memory(used memory = initial user sp - current user sp)
 
 SYSCALL_DISPATCH:
 
@@ -98,12 +92,11 @@ SYSCALL_DISPATCH:
   POP HL
 
   ; Check if syscall is valid. We always want to check if something is valid with a jump table.
-  ; Fix this :)
-  ;PUSH HL
-  ;LD HL, SYSCALL_COUNT
-  ;CP (HL)
-  ;POP HL
-  ;JP C, SYSCALL_END
+  PUSH HL
+  LD HL, SYSCALL_COUNT
+  CP (HL)
+  POP HL
+  JP NC, SYSCALL_END
 
   ; Save all registers, syscalls may alter them
   PUSH AF
@@ -112,8 +105,8 @@ SYSCALL_DISPATCH:
   PUSH HL
   
   ; Calculate address
+  LD (TMP_REG1), HL ; Save HL
   PUSH DE
-  PUSH HL
   LD HL, SYSCALL_TABLE
   SLA A ; Multiply by 2
   LD D, 0
@@ -126,18 +119,10 @@ SYSCALL_DISPATCH:
   ADD HL, DE ; HL = syscall address
   POP DE
   
-  ; It would be better to use HL instead of IX for speed, will be added later. Or just push the address to the stack and use ret
   JP (HL) ; Execute the syscall
 
 GET_HL_SYSCALL:
-  LD HL, 4
-  ADD HL, SP
-  PUSH DE
-  LD E, (HL)
-  INC HL
-  LD D, (HL)
-  EX DE, HL
-  POP DE
+  LD HL, (TMP_REG1)
   RET
 
 SYSCALL_END:
@@ -172,13 +157,13 @@ SYS_EXIT:
 SYS_WRITE:
   CALL GET_HL_SYSCALL
   SYS_WRITE_LOOP: ; Main loop
+    LD A, (HL)
+    OUT (C), A
+    INC HL
     XOR A
     DEC DE
     CP E
     JR Z, SYS_WRITE_END ; Loop ends when length = 0
-    LD A, (HL)
-    OUT (C), A
-    INC HL
     JR SYS_WRITE_LOOP
   SYS_WRITE_END: ; End loop
     JP SYSCALL_END
@@ -186,13 +171,13 @@ SYS_WRITE:
 SYS_READ:
   CALL GET_HL_SYSCALL
   SYS_READ_LOOP: ; Main loop
+    IN A, (C)
+    LD (HL), A
+    INC HL
     XOR A
     DEC DE
     CP E
     JR Z, SYS_READ_END ; Loop ends when length = 0
-    IN A, (C)
-    LD (HL), A
-    INC HL
     JR SYS_READ_LOOP
   SYS_READ_END: ; End loop
     JP SYSCALL_END
@@ -200,10 +185,6 @@ SYS_READ:
 SYS_GETS:
   CALL GET_HL_SYSCALL
   SYS_GETS_LOOP: ; Main loop
-    XOR A
-    DEC DE
-    CP E
-    JR Z, SYS_GETS_END ; Exit when DE is zero
     CALL RECEIVE_CHAR
     CALL ECHO_CHAR
     CP 0x0D ; Check for enter
@@ -214,6 +195,10 @@ SYS_GETS:
     JR Z, SYS_GETS_BCKSP ; Sometimes the terminal emulator is configured to output backspace as 0x7F(DEL in ascii)
     CP 0x08
     JR Z, SYS_GETS_BCKSP ; Default backspace
+    XOR A
+    DEC DE
+    CP E
+    JR Z, SYS_GETS_END ; Exit when DE is zero
     JR SYS_GETS_LOOP
   SYS_GETS_BCKSP: ; Handle backspace
     DEC HL
@@ -228,13 +213,13 @@ SYS_GETS:
 SYS_PUTS:
   CALL GET_HL_SYSCALL
   SYS_PUTS_LOOP: ; Main loop
-    XOR A
-    DEC DE
-    CP E
-    JR Z, SYS_PUTS_END ; Loop ends when length = 0
     LD A, (HL)
     CALL TRANSMIT_CHAR
     INC HL
+    XOR A
+    DEC DE
+    CP E
+    JR Z, SYS_PUTS_END ; Exit when DE is zero
     JR SYS_PUTS_LOOP
   SYS_PUTS_END: ; End loop
     JP SYSCALL_END
@@ -264,7 +249,10 @@ SYS_RAND:
   JP SYSCALL_END
 
 SYS_SLEEP:
-  JP SYSCALL_END
+  SYS_SLEEP_LOOP:
+
+  SYS_SLEEP_END:
+    JP SYSCALL_END
 
 SYS_FORK: ; Clones the process but does not execute
   CALL GET_HL_SYSCALL
@@ -283,10 +271,6 @@ SYS_GETPCOUNT:
   LD (HL), A
   JP SYSCALL_END
 
-SYS_GETMEM:
-  JP SYSCALL_END
-
-SYS_GETUSEDMEM:
 
 SECTION DATA
 SYSCALL_TABLE:

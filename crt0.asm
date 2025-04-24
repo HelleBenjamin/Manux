@@ -79,6 +79,17 @@ cleanup:
 
     ; How does the program end?
     ;INCLUDE "crt/classic/crt_terminate.inc"
+_fputc_cons_native:
+    ld hl, 2
+    add hl, sp ; get the address of the character
+    push af
+    push de
+    ld a, $04
+    ld de, 1
+    call SYSCALL_VECTOR
+    pop de
+    pop af
+    ret
 
 l_dcal:
     jp      (hl)

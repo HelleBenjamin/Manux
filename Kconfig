@@ -53,7 +53,7 @@ menu "Manux Kernel Configuration"
         config ENABLE_STDIO
             bool
             default n
-            prompt "Enable z88dk's stdio"
+            prompt "Enable z88dk's stdio (Recommended)"
             depends on !ENABLE_MANUX_STD
             help
             "Enable z88dk's stdio"
@@ -83,11 +83,11 @@ menu "Manux Kernel Configuration"
             "The address where the kernel starts. Note: 4 bytes are reserved for syscall call vector."
 
         config CLK_FREQ
-            hex "The clock frequency in Hz"
-            default 1000000
+            hex "The clock frequency in kHz"
+            default 1000
             prompt "Set the clock frequency"
             help
-            "The clock frequency in Hz"
+            "The clock frequency in kHz"
 
         config BASIC_START
             bool

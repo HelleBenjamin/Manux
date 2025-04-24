@@ -15,6 +15,7 @@
 #define SYS_SLEEP 8
 #define SYS_FORK 9
 #define SYS_GETPID 10
+#define SYS_GETPCOUNT 11
 
 void sysc_exit(short code) __z88dk_fastcall;
 void sysc_write(short port, short len, char *str);

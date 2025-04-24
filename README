@@ -15,6 +15,7 @@ Minimum system requirements
 ====================
 - Z80 CPU
 - 8K RAM
+- 8K ROM (not required if booting from BASIC)
 - a serial interface
 
 TODO
