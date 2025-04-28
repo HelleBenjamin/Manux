@@ -1,7 +1,7 @@
 ; SPDX-License-Identifier: GPL-2.0-or-later
 ; Copyright (c) 2025 Benjamin Helle
 
-SECTION CODE
+SECTION code_user
   INCLUDE "kernel.inc"
 
   PUBLIC CREATE_PROCESS

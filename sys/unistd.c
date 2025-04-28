@@ -23,7 +23,7 @@ ssize_t write(int fd, const void *buf, size_t count) {
     sysc_puts(count, (char *)buf);
     return count;
   } else {
-    sysc_write(fd, count, buf);
+    sysc_write(fd, count, (char *)buf);
   }
   return count;
 }

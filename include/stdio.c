@@ -1,14 +1,14 @@
 #include "stdio.h"
 
-int getlen(char *s) {
-  int len = 0;
+short getlen(char *s) {
+  short len = 0;
   while (s[len] != '\0') {
     ++len;
   }
   return len;
 }
 
-char putchar(char c){
+char putchar(char c) {
   asm(
     "extern _getparams1\n"
     "extern _fputc_cons_native\n"

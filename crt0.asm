@@ -75,10 +75,14 @@ ENDIF
     call    KERNEL_ENTRY
     ; Exit code is in hl
 cleanup:
-    call    crt0_exit
+    ret
 
     ; How does the program end?
     ;INCLUDE "crt/classic/crt_terminate.inc"
+PUBLIC fputc_cons_native
+PUBLIC _fputc_cons_native
+
+fputc_cons_native:    
 _fputc_cons_native:
     EXTERN TRANSMIT_CHAR
     ;ld hl, 2
@@ -97,6 +101,9 @@ _fputc_cons_native:
     call TRANSMIT_CHAR
     ret
 
+PUBLIC fgetc_cons
+PUBLIC _fgetc_cons
+fgetc_cons:
 _fgetc_cons:
     EXTERN RECEIVE_CHAR
     call RECEIVE_CHAR

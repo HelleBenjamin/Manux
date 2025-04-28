@@ -4,7 +4,7 @@
 ; tty.asm
 ; TTY Driver
 
-SECTION CODE
+SECTION code_user
 
   PUBLIC TRANSMIT_CHAR
   PUBLIC RECEIVE_CHAR

@@ -27,8 +27,8 @@ SYSCALL_VECTOR EQU 0xB000
 SECTION DATA
 
 SYSINFO:
-  db "Manux    Z80-PC   0.1      alpha    Z80     ", 0
-
+  ;db "Manux    Z80-PC   0.1      alpha    Z80   ", 0
+  db "Manux   Z80-PC   0.1    release  Z80   ", 0
 MSG:
   db "Hellord", 0DH, 0AH, 0
 

@@ -6,6 +6,9 @@
     "unistd.h": "c",
     "utsname.h": "c",
     "random": "c",
-    "*.tcc": "c"
+    "*.tcc": "c",
+    "bitset": "c",
+    "algorithm": "c",
+    "memory": "c"
   }
 }

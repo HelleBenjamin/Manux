@@ -5,7 +5,7 @@
 ; Assembly system calls
 
 INCLUDE "kernel/kernel.inc"
-SECTION CODE
+SECTION code_user
   
   PUBLIC SYSCALL_DISPATCH
 

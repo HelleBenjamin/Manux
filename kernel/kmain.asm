@@ -4,8 +4,7 @@
 ; kmain.asm
 ; Assembly kernel for Manux
 
-SECTION CODE  
-  ORG $B004
+SECTION code_user
 
   EXTERN crt0_init_bss
   EXTERN _OS_ENTRY

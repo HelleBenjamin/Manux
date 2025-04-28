@@ -47,10 +47,12 @@ void getparams3(void) {
     "_getparams1:\n"
     "ld hl, 4\n"
     "add hl, sp\n"
+    "push de\n"
     "ld e, (hl)\n" // 1st param, hl
     "inc hl\n"
     "ld d, (hl)\n"
     "ex de, hl\n"
+    "pop de\n"
     "ret\n"
   );
 

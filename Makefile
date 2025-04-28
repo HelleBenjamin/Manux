@@ -16,7 +16,7 @@ COBJ = $(CSRC:%.c=build/%.o)
 
 # Compile flags, -SO2 is recommended, use -SO3 for larger programs
 # Remove --Cc-unsigned if not working
-CC_FLAGS = +z80 -SO2 -Cc-unsigned -startup=3 -clib=classic
+CC_FLAGS = +z80 -SO2 -Cc-unsigned -startup=3 -clib=classic -compiler=sccz80
 AS_FLAGS = -mz80 -DUSE_RST=1 -DCLK_FREQ=1000
 
 # Another set of compile flags

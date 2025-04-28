@@ -14,10 +14,11 @@ void newline(void) {
   write(STDOUT_FILENO, "\n\r", 2);
 }
 
+static struct utsname uutsname;
+
 void print_uint(unsigned short n) {
-  // Powers of ten (for up to 5 digits = max 65535)
-  unsigned short powers[] = {10000, 1000, 100, 10, 1};
-  short started = 0; // to skip leading zeros
+  static unsigned short powers[] = {10000, 1000, 100, 10, 1};
+  short started = 0;
 
   for (short i = 0; i < 5; i++) {
       char digit = 0;
@@ -35,8 +36,8 @@ void print_uint(unsigned short n) {
   }
 }
 
-unsigned char hextobyte(char *hex) {
-  unsigned char byte = 0;
+char hextobyte(char *hex) {
+  char byte = 0;
   if (hex[0] >= '0' && hex[0] <= '9') {
     byte += (hex[0] - '0') << 4;
   } else if (hex[0] >= 'A' && hex[0] <= 'F') {
@@ -52,7 +53,7 @@ unsigned char hextobyte(char *hex) {
 
 void z80ld() {
   // Very small Z80 program loader, loads hex code to 0xF000
-  char *program = (char *)0xF000;
+  static char *program = (char *)0xF000;
   char pg[0xFF] = {0};
   read(STDIN_FILENO, &pg, 0xFF);
   for (short i = 0; i < 0xFF; i++) {
@@ -64,93 +65,50 @@ void z80ld() {
 }
 
 void terminal() {
-  char command[32] = {0};
+  static char command[32] = {0};
   while (1) {
     memset(command, 0, 32);
-    write(STDOUT_FILENO, "> ", 2);
+    puts("> ");
     read(STDIN_FILENO, &command, 32);
     newline();
-    if (strcmp(command, "Z$") == 0) {
-      ZHEX();
-    } else if (strcmp(command, "exit") == 0) {
+    if (strcmp(command, "exit") == 0) {
       _exit(0);
     } else if (strcmp(command, "uname") == 0) {
-      struct utsname utsname;
-      uname(&utsname);
-      write(STDOUT_FILENO, utsname.sysname, 8);
-      write(STDOUT_FILENO, utsname.nodename, 8);
-      write(STDOUT_FILENO, utsname.release, 8);
-      write(STDOUT_FILENO, utsname.version, 8);
-      write(STDOUT_FILENO, utsname.machine, 8);
+      puts(uutsname.sysname);
+      puts(uutsname.nodename);
+      puts(uutsname.release);
+      puts(uutsname.version);
+      puts(uutsname.machine);
       newline();
     } else if (strcmp(command, "z80ld") == 0) {
       z80ld();
     } else if (strcmp(command, "clear") == 0) {
-      char clear = 0x0C;
-      write(STDOUT_FILENO, &clear , 1);
+      putchar(0x0C);
     } else if (strcmp(command, "pid") == 0) {
-      char process_id = 0;
+      static char process_id = 0;
       sysc_getpid(&process_id);
       print_uint(process_id);
       newline();
     } else if (strcmp(command, "pcount") == 0) {
-      char process_count = 0;
+      static char process_count = 0;
       sysc_getpcount(&process_count);
       print_uint(process_count);
       newline();
     } else {
-      puts("Unknown command");
-      newline();
+      puts("Unknown command\n\r");
     }
   }
 }
 
 void main() {
-  struct utsname sname;
-  uname(&sname);
-  write(STDOUT_FILENO, sname.sysname, 8);
+  uname(&uutsname);
+  puts(uutsname.sysname);
+  puts(uutsname.release);
   newline();
   fork();
   sysc_exec((short *)terminal);
   _exit(0);
 }
-
-void ZHEX() { // Z$ (Z-hex)
-  unsigned char memarray[0xff] = {0};
-  unsigned char program[0xff] = {0};
-  unsigned char mempointer = 0;
-  unsigned short i = 0;
-
-  write(STDOUT_FILENO, "Z$>", 3);
-  read(STDIN_FILENO, &program, 0xFF);
-
-  while(i < 0xFF){
-    switch(program[i]) {
-      case '+':
-        ++memarray[mempointer];
-        break;
-      case '-':
-        --memarray[mempointer];
-        break;
-      case '>':
-        putchar(&memarray[mempointer]);
-        break;
-      case ';':
-        if(memarray[mempointer] == 0){
-          --mempointer;
-        } else {
-          ++mempointer;
-        }
-        break;
-      default:
-        break;
-    }
-    ++i;
-  }
-  newline();
-}
-
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>++>------>
 
 void OS_ENTRY() {
   main();
