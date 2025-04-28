@@ -1,9 +1,10 @@
 all: clean build MANUX
 
-# Assembler and compiler. We'll use zcc for now
+# Assembler and compiler. We'll use zcc and z80asm for now
 AS = z80asm
 CC = zcc
 
+# The build directory
 BUILDDIR = build
 
 # Sources
@@ -13,8 +14,9 @@ CSRC = sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
 
-# Compile flags
-CC_FLAGS = +z80 -SO2 -startup=3 -clib=classic
+# Compile flags, -SO2 is recommended, use -SO3 for larger programs
+# Remove --Cc-unsigned if not working
+CC_FLAGS = +z80 -SO2 -Cc-unsigned -startup=3 -clib=classic
 AS_FLAGS = -mz80 -DUSE_RST=1 -DCLK_FREQ=1000
 
 # Another set of compile flags

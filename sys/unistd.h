@@ -30,5 +30,6 @@ void _exit(short code);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 pid_t fork(void);
+pid_t getpid(void);
 
 #endif

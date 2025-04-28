@@ -20,14 +20,21 @@ Minimum system requirements
 
 TODO
 ====
-Better kernel loader(like z80ld)
+- Better kernel loader for BASIC
+- Heap manager
+- Reorganize kernel functions
+- Minimal Z80 assembler(supports only the main instructions)
+
+Tips for writing efficient code
+===============================
+- Use 8-bit and 16-bit variables if possible
+- Use preincrement/decrement when possible
 
 Pre-requisites
 =============
 - z88dk
 - make
 - kconfig-frontends-nox
-
 
 Building
 ========

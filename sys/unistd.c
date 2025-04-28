@@ -32,3 +32,9 @@ pid_t fork(void) {
   sysc_fork();
   return 0;
 }
+
+pid_t getpid(void) {
+  char buf = 0;
+  sysc_getpid(&buf);
+  return buf;
+}

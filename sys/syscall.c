@@ -8,6 +8,9 @@
 
 void getparams3(void) {
   asm( // The name is the name of the function
+    "public _getparams3\n"
+    "public _getparams2\n"
+    "public _getparams1\n"
     "ld hl, 4\n"
     "add hl, sp\n"
     "ld e, (hl)\n" // 3rd param, hl

@@ -8,12 +8,20 @@ int getlen(char *s) {
   return len;
 }
 
-int putchar(char c) {
-  sysc_puts(1, &c);
-  return c;
+char putchar(char c){
+  asm(
+    "extern _getparams1\n"
+    "extern _fputc_cons_native\n"
+    "call _getparams1\n"
+    "push hl\n"
+    "call _fputc_cons_native\n"
+    "pop hl"
+  );
+  //sysc_puts(1, &c);
+  return 0;
 }
   
-int puts(char *s) {
+char puts(char *s){
   short len = getlen(s);
   sysc_puts(len, s);
   return len;

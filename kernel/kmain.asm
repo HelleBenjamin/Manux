@@ -63,7 +63,7 @@ KERNEL_ENTRY:
   LD (HL), D ; Now the syscall address is at 0xB000
 
   ; Set syscall count
-  LD A, $0B
+  LD A, $0C
   LD (SYSCALL_COUNT), A
 
   ; Load kernel flags

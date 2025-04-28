@@ -16,7 +16,7 @@
 ; Some general scope declarations
 ;-------
 
-    EXTERN    _main           ;main() is always external to crt0 code
+    EXTERN    KERNEL_ENTRY           ; Kernel entry is always external to crt0 code
     PUBLIC    crt0_init_bss
     PUBLIC    cleanup         ;jp'd to by exit()
     PUBLIC    l_dcal          ;jp(hl)
@@ -71,8 +71,8 @@ ELSE
     ld      (exitsp),sp
 ENDIF
 
-    ; Entry to the user code
-    call    _main
+    ; Entry to the kernel code
+    call    KERNEL_ENTRY
     ; Exit code is in hl
 cleanup:
     call    crt0_exit
@@ -80,15 +80,28 @@ cleanup:
     ; How does the program end?
     ;INCLUDE "crt/classic/crt_terminate.inc"
 _fputc_cons_native:
+    EXTERN TRANSMIT_CHAR
+    ;ld hl, 2
+    ;add hl, sp ; get the address of the character
+    ;push af
+    ;push de
+    ;ld a, $04
+    ;ld de, 1
+    ;call SYSCALL_VECTOR
+    ;pop de
+    ;pop af
+
     ld hl, 2
     add hl, sp ; get the address of the character
-    push af
-    push de
-    ld a, $04
-    ld de, 1
-    call SYSCALL_VECTOR
-    pop de
-    pop af
+    ld a, (hl)
+    call TRANSMIT_CHAR
+    ret
+
+_fgetc_cons:
+    EXTERN RECEIVE_CHAR
+    call RECEIVE_CHAR
+    ld l, a ; char in l
+    ld h, 0
     ret
 
 l_dcal:

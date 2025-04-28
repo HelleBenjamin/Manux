@@ -133,7 +133,7 @@ void ZHEX() { // Z$ (Z-hex)
         --memarray[mempointer];
         break;
       case '>':
-        write(STDOUT_FILENO, &memarray[mempointer], 1);
+        putchar(&memarray[mempointer]);
         break;
       case ';':
         if(memarray[mempointer] == 0){
@@ -145,7 +145,7 @@ void ZHEX() { // Z$ (Z-hex)
       default:
         break;
     }
-    i++;
+    ++i;
   }
   newline();
 }
