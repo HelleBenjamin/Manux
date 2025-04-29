@@ -2,6 +2,7 @@
 ; Copyright (c) 2025 Benjamin Helle
 
 SECTION code_user
+
   INCLUDE "kernel.inc"
 
   PUBLIC CREATE_PROCESS
