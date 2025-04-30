@@ -4,7 +4,7 @@
 ; kmain.asm
 ; Assembly kernel for Manux
 
-SECTION code_user
+SECTION code_home ; Home section is only used for the kernel
 
   EXTERN crt0_init_bss
   EXTERN _OS_ENTRY
@@ -88,9 +88,6 @@ KERNEL_ENTRY:
   SET 1, (HL)
   POP HL
   LD SP, (USER_SP)
-
-  ; Initialize BSS
-  CALL crt0_init_bss
 
   ; Create root process
   LD A, 9

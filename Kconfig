@@ -12,7 +12,7 @@ menu "Manux Kernel Configuration"
             "The address where the system ram starts"
 
         menu "Stack Configuration"
-            config CC_REGISTER_SP
+            config AS_USER_STACK
                 hex "Set the usermode stack pointer (B)"
                 default 0xA500
                 range 0x0000 0xFFFF
@@ -56,8 +56,7 @@ menu "Manux Kernel Configuration"
         config CC_ENABLE_STDIO
             bool
             default y
-            prompt "Enable z88dk's stdio (Recommended over Manux_STD)"
-            depends on !ENABLE_MANUX_STD
+            prompt "Enable z88dk's stdio"
             help
             "Enable z88dk's stdio"
         config CC_CRT_MODEL
@@ -72,7 +71,7 @@ menu "Manux Kernel Configuration"
 
     menu "Kernel Options"
         config CC_CRT_ORG_CODE
-            hex "The address where the kernel starts"
+            hex "The address where the kernel code starts"
             default 0xB004
             range 0x0000 0xFFFF
             prompt "Set the kernel start address."
@@ -93,14 +92,6 @@ menu "Manux Kernel Configuration"
             prompt "Set the clock frequency"
             help
             "The clock frequency in kHz"
-
-        config CC_ENABLE_MANUX_STD
-            bool
-            default n
-            depends on !ENABLE_STDIO
-            prompt "Enable Manux standard library(MSL)"
-            help
-            "Enable manux standard library"
 
         menu "Processes"
             config AS_MAX_PROCESSES

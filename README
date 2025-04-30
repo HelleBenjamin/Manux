@@ -32,7 +32,7 @@ Tips for writing efficient code
 
 Pre-requisites
 =============
-- z88dk
+- z88dk (nightly builds are recommended)
 - make
 - kconfig-frontends-nox
 

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2025 Benjamin Helle
+
 #include "shell.h"
 #include "unistd.h"
 #include "utsname.h"
@@ -21,18 +23,18 @@ void print_uint(unsigned short n) {
   short started = 0;
 
   for (short i = 0; i < 5; i++) {
-      char digit = 0;
+    char digit = 0;
 
-      while (n >= powers[i]) {
-          n -= powers[i];
-          digit++;
-      }
+    while (n >= powers[i]) {
+      n -= powers[i];
+      digit++;
+    }
 
-      if (digit > 0 || started || i == 4) {
-          char char_digit = '0' + digit;
-          putchar(char_digit);
-          started = 1;
-      }
+    if (digit > 0 || started || i == 4) {
+      char char_digit = '0' + digit;
+      putchar(char_digit);
+      started = 1;
+    }
   }
 }
 
@@ -52,9 +54,9 @@ char hextobyte(char *hex) {
 }
 
 void z80ld() {
-  // Very small Z80 program loader, loads hex code to 0xF000
+  // Very small Z80 program loader, loads hex code to 0xF000 and executes it
   static char *program = (char *)0xF000;
-  char pg[0xFF] = {0};
+  char pg[0xFF] = {0}; // increase size if needed
   read(STDIN_FILENO, &pg, 0xFF);
   for (short i = 0; i < 0xFF; i++) {
     program[i] = hextobyte(&pg[i * 2]);

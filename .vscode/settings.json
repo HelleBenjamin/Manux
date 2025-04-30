@@ -9,6 +9,7 @@
     "*.tcc": "c",
     "bitset": "c",
     "algorithm": "c",
-    "memory": "c"
+    "memory": "c",
+    "string.h": "c"
   }
 }

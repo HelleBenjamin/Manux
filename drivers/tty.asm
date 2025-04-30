@@ -2,7 +2,7 @@
 ; Copyright (c) 2025 Benjamin Helle
 ;
 ; tty.asm
-; TTY Driver
+; Teletype driver
 
 SECTION code_driver
 
@@ -46,7 +46,7 @@ TRANSMIT_CHAR:
   ; A = char
   ;Returns:
   ; none
-  OUT ($81), A
+  OUT (TTY_PORT), A
   RET
 
 RECEIVE_CHAR:
@@ -54,7 +54,7 @@ RECEIVE_CHAR:
   ; none
   ;Returns:
   ; A = char
-  IN A, ($81)
+  IN A, (TTY_PORT)
   OR A
   JR Z, RECEIVE_CHAR ; Wait for char
   RET

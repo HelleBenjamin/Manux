@@ -1,4 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2025 Benjamin Helle
+
 #include "stdio.h"
+
+/*
+  Custom optimized stdio for Manux. Use this instead of the standard stdio library.
+  Functions communicate directly with the TTY driver via crt wrapper. For string operations, it uses syscalls.
+*/
 
 short getlen(char *s) {
   short len = 0;
@@ -17,18 +25,20 @@ char putchar(char c) {
     "call _fputc_cons_native\n"
     "pop hl"
   );
-  //sysc_puts(1, &c);
   return 0;
 }
   
 char puts(char *s){
   short len = getlen(s);
   sysc_puts(len, s);
-  return len;
+  return 0;
 }
 
 char getchar(void) {
-  char *c = '\0';
-  sysc_gets(1, c);
-  return *c;
+  asm(
+    "extern _fgetc_cons\n"
+    "call _fgetc_cons\n"
+    "ld l, a\n"
+    "ld h, 0\n"
+  );
 }

@@ -1,11 +1,11 @@
 ; SPDX-License-Identifier: GPL-2.0-or-later
 ; Copyright (c) 2025 Benjamin Helle
 ;
-; system_call.s
+; system_call.asm
 ; Assembly system calls
 
 INCLUDE "kernel/kernel.inc"
-SECTION code_user
+SECTION code_home
   
   PUBLIC SYSCALL_DISPATCH
 

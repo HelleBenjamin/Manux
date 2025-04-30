@@ -8,17 +8,13 @@ CC = zcc
 BUILDDIR = build
 
 # Sources
-KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.s drivers/tty.asm
+KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
 CSRC := sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
 
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
 
-# Compile flags, -SO2 is recommended, use -SO3 for larger programs
-# Remove --Cc-unsigned if not working
-
-
-# Exract compile flags
+# Extract flags from .config file
 
 # Assembler flags
 AS_CONFIG_FLAGS := $(shell \
@@ -30,11 +26,13 @@ CC_CONFIG_FLAGS := $(shell \
   grep '^CONFIG_CC_' .config | sed 's/^CONFIG_CC_/-pragma-define:/' | sed 's/y$$/1/' | sed 's/n$$/0/' \
 )
 
-# Add -startup=3 if not working
-CC_FLAGS = +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80
+# Compile flags, -SO2 is recommended, use -SO3 for larger programs
+# Remove --Cc-unsigned if not working
+# Add -startup=3 if not working 
+CC_FLAGS = +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 -pragma-define:CLIB_EXIT_STACK_SIZE=0
 AS_FLAGS = -mz80 $(AS_CONFIG_FLAGS)
 
-# Another set of compile flags
+# Another set of compile flags, currently unused
 PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
        	-pragma-define:CRT_ORG_BSS=0xC000 \
        	-pragma-define:CRT_MODEL=3 \
@@ -61,6 +59,7 @@ build/%.o: %.asm
 build/%.o: %.c
 	$(CC) $(CC_FLAGS) -c $< -o $@
 
+# Build the final binary
 MANUX: $(KOBJ) $(COBJ)
 	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(CC_CONFIG_FLAGS) -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
 
