@@ -1,0 +1,135 @@
+menu "Manux Kernel Configuration"
+
+    menu "Memory Configuration"
+
+
+        config COMMON_RAM_START
+            hex "The address where the system ram starts"
+            default 0x8000
+            range 0x0000 0xFFFF
+            prompt "Set the system ram start address"
+            help 
+            "The address where the system ram starts"
+
+        menu "Stack Configuration"
+            config AS_USER_STACK
+                hex "Set the usermode stack pointer (B)"
+                default 0xA500
+                range 0x0000 0xFFFF
+                prompt "Set the usermode stack pointer"
+                help
+                "This is the stack pointer for usermode programs"
+
+        endmenu
+        
+        menu "Heap Configuration"
+
+            config CC_ENABLE_HEAP
+                bool
+                default n
+                prompt "Enable the kernel heap"
+                help
+                "Enable the kernel heap"
+
+            config CC_HEAP_SIZE
+                depends on CC_ENABLE_HEAP
+                hex "The size of the kernel heap"
+                default 0x1000
+                range 0x0000 0xFFFF
+                prompt "Set the kernel heap size (B)"
+                help
+                "The size of the kernel heap"
+            config CC_HEAP_ADDRESS
+                depends on CC_ENABLE_HEAP
+                hex "The address of the kernel heap"
+                default 0xD000
+                range 0x0000 0xFFFF
+                prompt "Set the kernel heap address"
+                help
+                "The address of the kernel heap"
+
+        endmenu
+
+    endmenu
+    
+    menu "z88dk Options"
+        config CC_ENABLE_STDIO
+            bool
+            default y
+            prompt "Enable z88dk's stdio"
+            help
+            "Enable z88dk's stdio"
+        config CC_CRT_MODEL
+            hex "Data compression model"
+            default 3
+            range 0 3
+            prompt "Set the data compression model"
+            help
+            "Data compression model"
+
+    endmenu
+
+    menu "Kernel Options"
+        config CC_CRT_ORG_CODE
+            hex "The address where the kernel code starts"
+            default 0xB004
+            range 0x0000 0xFFFF
+            prompt "Set the kernel start address."
+            help
+            "The address where the kernel starts. Note: 4 bytes are reserved for syscall call vector."
+
+        config CC_CRT_ORG_BSS
+            hex "The address where the kernel bss starts"
+            default 0xC000
+            range 0x0000 0xFFFF
+            prompt "Set the kernel bss start address."
+            help
+            "The address where the kernel bss starts."
+
+        config COMMON_CLK_FREQ
+            hex "The clock frequency in kHz"
+            default 1000
+            prompt "Set the clock frequency"
+            help
+            "The clock frequency in kHz"
+
+        config AS_SYSCALL_VECTOR
+            hex
+            default 0xB000
+            range 0x0000 0xFFFF
+            prompt "Set the syscall vector"
+            help
+            "The address where syscalls are called from"
+
+        menu "Processes"
+            config AS_MAX_PROCESSES
+                hex
+                default 0x05
+                range 0x00 0xFF
+                prompt "Set the maximum number of processes"
+                help
+                "The maximum number of processes"
+
+        endmenu
+    endmenu
+
+    menu "Drivers"
+        menu "TTY"
+            config AS_TTY_PORT
+                hex
+                default 0x81
+                range 0x00 0xFF
+                prompt "Set the TTY port"
+                help
+                "The TTY port"
+            config AS_USE_RST
+                bool
+                default n
+                prompt "Use custom RST vectors"
+                help
+                "Use custom RST vectors to input/output"
+
+        endmenu
+    endmenu
+
+endmenu
