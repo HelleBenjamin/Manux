@@ -7,7 +7,7 @@
 SECTION code_home ; Home section is only used for the kernel
 
   EXTERN crt0_init_bss
-  EXTERN _OS_ENTRY
+  EXTERN _main
   EXTERN SYSCALL_DISPATCH
   EXTERN INIT_TTY
 
@@ -17,7 +17,7 @@ SECTION code_home ; Home section is only used for the kernel
   ; Kernel flags
   ; bit 0 - echo, should print text on gets
   ; bit 1 - mode, kernelmode (0) or usermode (1)
-  ; bit 2 - booted, if the kernel has already booted
+  ; bit 2 - unused
   ; bit 3 - unused
   ; bit 4 - unused
   ; bit 5 - unused
@@ -53,13 +53,13 @@ KERNEL_ENTRY:
   CALL INIT_TTY
 
   ; Load syscall handler address
-  LD HL, $B000
+  LD HL, SYSCALL_VECTOR
   LD DE, SYSCALL_DISPATCH
   LD (HL), $C3 ; JP
   INC HL
   LD (HL), E
   INC HL
-  LD (HL), D ; Now the syscall address is at 0xB000
+  LD (HL), D ; Now the syscall address is at address defined by SYSCALL_VECTOR
 
   ; Set syscall count
   LD A, $0C
@@ -91,11 +91,11 @@ KERNEL_ENTRY:
 
   ; Create root process
   LD A, 9
-  CALL $B000 ; Fork
+  CALL SYSCALL_VECTOR ; Fork
 
   LD HL, ROOT_PROCESS
   LD A, 5
-  CALL $B000 ; Exec
+  CALL SYSCALL_VECTOR  ; Exec
 
   ; Switch to kernelmode
   LD (USER_SP), SP
@@ -114,16 +114,16 @@ ROOT_PROCESS:
 
   ; Create OS process
   LD A, 9
-  CALL $B000 ; Fork
+  CALL SYSCALL_VECTOR  ; Fork
 
-  LD HL, _OS_ENTRY
+  LD HL, _main
   LD A, 5
-  CALL $B000 ; And execute
+  CALL SYSCALL_VECTOR  ; And execute
 
   ; Exit
   LD BC, 0
   LD A, 0
-  CALL $B000
+  CALL SYSCALL_VECTOR 
 
 
 INCLUDE "kernel/kernel.inc"

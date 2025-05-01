@@ -1,20 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2025 Benjamin Helle
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    printf("Usage: %s <hex>\n", argv[0]);
+  if (argc < 3) {
+    printf("Usage: %s <address> <input_file> <output_file>\n", argv[0]);
     exit(1);
   }
 
-  FILE *source = fopen(argv[1], "rb");
+  char *address = argv[1]; // Address must be in decimal
+
+  FILE *source = fopen(argv[2], "rb");
   if (source == NULL) {
     perror("fopen");
     exit(1);
   }
-  FILE *output = fopen(argv[2], "wb");
+  FILE *output = fopen(argv[3], "wb");
   if (output == NULL) {
     perror("fopen");
     exit(1);
@@ -31,36 +36,22 @@ int main(int argc, char **argv) {
     i++;
   }
 
-  /*   Example 1 output
-
-  0 REM BASIC HEX LOADER FOR Z80
-  1 POKE &H8048, &HC3
-  2 POKE &H8049, &H00
-  3 POKE &H804A, &H99
-  4 FOR I = &H9900 TO &H9903
-  5 READ A
-  6 POKE I, A
-  7 NEXT I
-  8 DATA 62, 48, 207, 201
-  
-
-  */
-
-
   int line = 10;
-  int addr = 0xB004;
+  int addr = atoi(address);
   int size = file_size;
-  fprintf(output, "0 REM BASIC HEX LOADER FOR Z80, SIZE: %d\n", size);
-  fprintf(output, "1 POKE &H8048, &HC3\n");
-  fprintf(output, "2 POKE &H8049, &H04\n");
-  fprintf(output, "3 POKE &H804A, &HB0\n");
-  fprintf(output, "4 FOR I = &H%04x TO &H%04x\n", addr, addr+size-1);
+
+  // Main program
+  fprintf(output, "0 REM MANUX HEX LOADER FOR BASIC, SIZE: %d bytes\n", size);
+  fprintf(output, "1 POKE 32840-65536, 195\n"); // Subtract because BASIC treats numbers as signed
+  fprintf(output, "2 POKE 32841-65536, %d\n", addr & 0xFF);
+  fprintf(output, "3 POKE 32842-65536, %d\n", addr >> 8);
+  fprintf(output, "4 FOR I = %d-65536 TO %d-65536\n", addr, addr+size-1);
   fprintf(output, "5 READ A\n");
   fprintf(output, "6 POKE I, A\n");
   fprintf(output, "7 NEXT I\n");
 
   int dataWritten = 0;
-  while (dataWritten < i) {
+  while (dataWritten < i) { // Write the data
     int lineLen = 9; // Including %d DATA
     fprintf(output, "%d DATA ", line);
     while (lineLen <= 70 && dataWritten < i) {
@@ -76,10 +67,12 @@ int main(int argc, char **argv) {
     line++;
     addr++;
   }
-  fprintf(output, "%d A=USR(0)\n", line);
+
+  fprintf(output, "%d A=USR(0)\n", line); // This starts the kernel
 
   fclose(source);
   fclose(output);
   free(src_hex);
+
   return 0;
 }

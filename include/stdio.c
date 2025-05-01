@@ -4,7 +4,7 @@
 #include "stdio.h"
 
 /*
-  Custom optimized stdio for Manux. Use this instead of the standard stdio library.
+  Custom optimized stdio for Manux. Use this instead of the z88dk's stdio library.
   Functions communicate directly with the TTY driver via crt wrapper. For string operations, it uses syscalls.
 */
 

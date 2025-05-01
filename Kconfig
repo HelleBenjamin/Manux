@@ -93,6 +93,14 @@ menu "Manux Kernel Configuration"
             help
             "The clock frequency in kHz"
 
+        config AS_SYSCALL_VECTOR
+            hex
+            default 0xB000
+            range 0x0000 0xFFFF
+            prompt "Set the syscall vector"
+            help
+            "The address where syscalls are called from"
+
         menu "Processes"
             config AS_MAX_PROCESSES
                 hex

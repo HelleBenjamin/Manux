@@ -61,9 +61,10 @@ void getparams3(void) {
 
 void sysc_exit(short code) __z88dk_fastcall {
   asm(
+    "extern SYSCALL_DISPATCH\n"
     "ld a, 0\n"
     "ld c, l\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
@@ -71,7 +72,7 @@ void sysc_write(short port, short len, char *str) {
   asm(
     "call _getparams3\n"
     "ld a, 1\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
@@ -79,7 +80,7 @@ void sysc_read(short port, short len, char *str) {
   asm(
     "call _getparams3\n"
     "ld a, 2\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
@@ -87,7 +88,7 @@ void sysc_gets(short len, char *str) {
   asm(
     "call _getparams2\n"
     "ld a, 3\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
@@ -95,28 +96,28 @@ void sysc_puts(short len, char *str) {
   asm(
     "call _getparams2\n"
     "ld a, 4\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
 void sysc_exec(short *addr) __z88dk_fastcall {
   asm(
     "ld a, 5\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
 void sysc_getinfo(char *str) __z88dk_fastcall {
   asm(
     "ld a, 6\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
 void sysc_rand(short *buf) __z88dk_fastcall {
   asm(
     "ld a, 7\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
@@ -127,20 +128,20 @@ void sysc_sleep(short ms) {
 void sysc_fork(void) {
   asm(
     "ld a, 9\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
 void sysc_getpid(char *buf) __z88dk_fastcall {
   asm(
     "ld a, 10\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }
 
 void sysc_getpcount(char *buf) __z88dk_fastcall {
   asm(
     "ld a, 11\n"
-    "call $B000"
+    "call SYSCALL_DISPATCH"
   );
 }

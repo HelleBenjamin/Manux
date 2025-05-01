@@ -7,6 +7,5 @@
 void newline(void);
 void terminal();
 void main();
-void OS_ENTRY();
 
 #endif

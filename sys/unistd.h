@@ -9,7 +9,6 @@
 
 /*
   Very small POSIX API implementation.
-  Works for IO only
 */
 
 #ifndef NULL

@@ -111,8 +111,3 @@ void main() {
   sysc_exec((short *)terminal);
   _exit(0);
 }
-
-void OS_ENTRY() {
-  main();
-  return;
-}

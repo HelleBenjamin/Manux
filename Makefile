@@ -1,18 +1,24 @@
 all: clean build MANUX
 
 # Assembler and compiler. We'll use zcc and z80asm for now
-AS = z80asm
-CC = zcc
+AS := z80asm
+CC := zcc
 
 # The build directory
-BUILDDIR = build
+BUILDDIR := build
 
-# Sources
+# Kernel sources. These all are required for a minimal kernel build
 KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
+
+# System C sources
 CSRC := sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
+
+# User programs
+USRC := 
 
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
+UOBJ = $(USRC:%.c=build/%.o)
 
 # Extract flags from .config file
 
@@ -29,8 +35,8 @@ CC_CONFIG_FLAGS := $(shell \
 # Compile flags, -SO2 is recommended, use -SO3 for larger programs
 # Remove --Cc-unsigned if not working
 # Add -startup=3 if not working 
-CC_FLAGS = +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 -pragma-define:CLIB_EXIT_STACK_SIZE=0
-AS_FLAGS = -mz80 $(AS_CONFIG_FLAGS)
+CC_FLAGS := +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 -pragma-define:CLIB_EXIT_STACK_SIZE=0
+AS_FLAGS := -mz80 $(AS_CONFIG_FLAGS)
 
 # Another set of compile flags, currently unused
 PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
@@ -44,12 +50,12 @@ PDEF = 	-pragma-define:CRT_ORG_CODE=0xB004 \
 			-pragma-define:SYSCALL_VECTOR=0xB000 \
 
 # Some files
-CRT0 = crt0.asm
-OUTPUT = build/MANUX.bin
+CRT0 := crt0.asm
+OUTPUT := build/MANUX.bin
 
 # Make build directory
 build:
-	mkdir -p build/kernel build/drivers/io build/sys build/include
+	mkdir -p build/kernel build/drivers/io build/sys build/include build/user
 
 # Assembly files
 build/%.o: %.asm
@@ -61,7 +67,7 @@ build/%.o: %.c
 
 # Build the final binary
 MANUX: $(KOBJ) $(COBJ)
-	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(CC_CONFIG_FLAGS) -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
+	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ) $(CC_CONFIG_FLAGS) -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
 
 # Clean the build directory
 clean:

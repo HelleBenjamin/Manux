@@ -59,7 +59,6 @@ PUSH_PROCESS:
   PUSH DE
   PUSH HL
 
-
   LD HL, (USER_SP) ; Get the stack pointer before creating the new process
   PUSH HL ; Save the old stack pointer
   LD E, (HL)
