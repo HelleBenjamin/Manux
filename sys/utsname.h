@@ -16,6 +16,6 @@ typedef struct utsname {
   char machine[8];
 } utsname;
 
-short uname(struct utsname *buf);
+short uname(struct utsname *buf) __z88dk_fastcall;
 
 #endif

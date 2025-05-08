@@ -14,7 +14,7 @@ KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
 CSRC := sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
 
 # User programs
-USRC := 
+USRC := user/sal.c
 
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
@@ -32,10 +32,19 @@ CC_CONFIG_FLAGS := $(shell \
   grep '^CONFIG_CC_' .config | sed 's/^CONFIG_CC_/-pragma-define:/' | sed 's/y$$/1/' | sed 's/n$$/0/' \
 )
 
+# Include user programs
+ifeq ($(filter -pragma-define:INCLUDE_USER_PROGRAMS=1, $(CC_CONFIG_FLAGS)), -pragma-define:INCLUDE_USER_PROGRAMS=1) 
+	INCLUDE_USR_PROGRAMS := 1
+	INC_USR_PG_ARG := -DINCLUDE_USER_PROGRAMS=1
+else 
+	INCLUDE_USR_PROGRAMS := 0
+	INC_USR_PG_ARG :=
+endif
+
 # Compile flags, -SO2 is recommended, use -SO3 for larger programs
 # Remove --Cc-unsigned if not working
 # Add -startup=3 if not working 
-CC_FLAGS := +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 -pragma-define:CLIB_EXIT_STACK_SIZE=0
+CC_FLAGS := +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 $(INC_USR_PG_ARG) -Wall
 AS_FLAGS := -mz80 $(AS_CONFIG_FLAGS)
 
 # Another set of compile flags, currently unused
@@ -55,7 +64,7 @@ OUTPUT := build/MANUX.bin
 
 # Make build directory
 build:
-	mkdir -p build/kernel build/drivers/io build/sys build/include build/user
+	mkdir -p build/kernel build/drivers build/sys build/include build/user
 
 # Assembly files
 build/%.o: %.asm
@@ -65,9 +74,17 @@ build/%.o: %.asm
 build/%.o: %.c
 	$(CC) $(CC_FLAGS) -c $< -o $@
 
+# User programs
+ifeq ($(INCLUDE_USR_PROGRAMS),1)
+  UOBJ_COND := $(UOBJ)
+else
+  UOBJ_COND :=
+endif
+
+
 # Build the final binary
-MANUX: $(KOBJ) $(COBJ)
-	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ) $(CC_CONFIG_FLAGS) -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
+MANUX: $(KOBJ) $(COBJ) $(UOBJ_COND)
+	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ_COND) $(CC_CONFIG_FLAGS) -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
 
 # Clean the build directory
 clean:

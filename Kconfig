@@ -3,7 +3,7 @@ menu "Manux Kernel Configuration"
     menu "Memory Configuration"
 
 
-        config COMMON_RAM_START
+        config AS_RAM_START
             hex "The address where the system ram starts"
             default 0x8000
             range 0x0000 0xFFFF
@@ -12,13 +12,13 @@ menu "Manux Kernel Configuration"
             "The address where the system ram starts"
 
         menu "Stack Configuration"
-            config AS_USER_STACK
-                hex "Set the usermode stack pointer (B)"
-                default 0xA500
+            config AS_STACK_START
+                hex
+                default 0xF000
                 range 0x0000 0xFFFF
-                prompt "Set the usermode stack pointer"
-                help
-                "This is the stack pointer for usermode programs"
+                prompt "Set the stack start address"
+                help 
+                "The address where the stack starts downwards"
 
         endmenu
         
@@ -61,7 +61,7 @@ menu "Manux Kernel Configuration"
             "Enable z88dk's stdio"
         config CC_CRT_MODEL
             hex "Data compression model"
-            default 3
+            default 2
             range 0 3
             prompt "Set the data compression model"
             help
@@ -130,6 +130,15 @@ menu "Manux Kernel Configuration"
                 "Use custom RST vectors to input/output"
 
         endmenu
+    endmenu
+
+    menu "User Programs"
+        config CC_INCLUDE_USER_PROGRAMS
+            bool
+            default y
+            prompt "Include user programs"
+            help
+            "Include user programs. Note: this will make the build bigger."
     endmenu
 
 endmenu

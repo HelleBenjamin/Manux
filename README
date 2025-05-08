@@ -69,6 +69,8 @@ TODO
 - Minimal Z80 assembler(supports only the main instructions)
 - More POSIX features
 - More documentation
+- Compressed data in BASIC loader
+- A file system
 
 Tips for writing efficient code
 ===============================
@@ -88,7 +90,7 @@ Pre-requisites
 
 Building
 ========
-
+Configure Manux using `kconfig-mconf Kconfig`.
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel.
 Use basicloader(bs) to load Manux from BASIC. The bs is tested on BASIC 4.7. Usage example: `./bs 45060 build/MANUX.rom MANUX.bas`
 

@@ -8,6 +8,11 @@
 #include <string.h>
 #include "../include/stdio.h"
 
+#if INCLUDE_USER_PROGRAMS
+// Add user program includes here
+#include "../user/sal.h"
+#endif
+
 /*
   Simple shell for Manux. This provides minimal interface for the kernel.
 */
@@ -18,16 +23,16 @@ void newline(void) {
 
 static struct utsname uutsname;
 
-void print_uint(unsigned short n) {
+void print_uint(unsigned short n) __z88dk_fastcall {
   static unsigned short powers[] = {10000, 1000, 100, 10, 1};
   short started = 0;
 
-  for (short i = 0; i < 5; i++) {
+  for (char i = 0; i < 5; ++i) {
     char digit = 0;
 
     while (n >= powers[i]) {
       n -= powers[i];
-      digit++;
+      ++digit;
     }
 
     if (digit > 0 || started || i == 4) {
@@ -38,7 +43,7 @@ void print_uint(unsigned short n) {
   }
 }
 
-char hextobyte(char *hex) {
+char hextobyte(char *hex) __z88dk_fastcall {
   char byte = 0;
   if (hex[0] >= '0' && hex[0] <= '9') {
     byte += (hex[0] - '0') << 4;
@@ -55,10 +60,10 @@ char hextobyte(char *hex) {
 
 void z80ld() {
   // Very small Z80 program loader, loads hex code to 0xF000 and executes it
-  static char *program = (char *)0xF000;
-  char pg[0xFF] = {0}; // increase size if needed
+  char *program = (char *)0xF000;
+  static char pg[0xFF]; // increase size if needed
   read(STDIN_FILENO, &pg, 0xFF);
-  for (short i = 0; i < 0xFF; i++) {
+  for (char i = 0; i < 0xFF; ++i) {
     program[i] = hextobyte(&pg[i * 2]);
   }
   newline();
@@ -96,14 +101,21 @@ void terminal() {
       sysc_getpcount(&process_count);
       print_uint(process_count);
       newline();
-    } else {
+    } 
+    #if INCLUDE_USER_PROGRAMS
+    // Add user program commands here
+    else if (strcmp(command, "sal") == 0) {
+      sal_main();
+    }
+    #endif
+    else {
       puts("Unknown command\n\r");
     }
   }
 }
 
 void main() {
-  uname(&uutsname);
+  uname(&uutsname); // Get system information
   puts(uutsname.sysname);
   puts(uutsname.release);
   newline();

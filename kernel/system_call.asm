@@ -154,7 +154,7 @@ SYS_EXIT:
   CALL EXIT_PROCESS
   JP SYSCALL_END
 
-SYS_WRITE:
+SYS_WRITE: ; TODO: Make this write to a file when fs is implemented
   CALL GET_HL_SYSCALL
   SYS_WRITE_LOOP: ; Main loop
     LD A, (HL)
@@ -168,7 +168,7 @@ SYS_WRITE:
   SYS_WRITE_END: ; End loop
     JP SYSCALL_END
 
-SYS_READ:
+SYS_READ: ; TODO: Make this read from a file when fs is implemented
   CALL GET_HL_SYSCALL
   SYS_READ_LOOP: ; Main loop
     IN A, (C)
@@ -188,6 +188,8 @@ SYS_GETS:
     CALL RECEIVE_CHAR
     CALL ECHO_CHAR
     CP 0x0D ; Check for enter
+    JR Z, SYS_GETS_END ; If enter, the string is ready
+    CP 0x0A ; Check for enter 2
     JR Z, SYS_GETS_END ; If enter, the string is ready
     LD (HL), A
     INC HL

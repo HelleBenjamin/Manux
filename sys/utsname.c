@@ -5,10 +5,10 @@
 #include "syscall.h"
 #include <string.h>
 
-short uname(struct utsname *buf) {
+short uname(struct utsname *buf) __z88dk_fastcall{
   char nbuf[40];
   sysc_getinfo(nbuf);
-  for (short j = 7; j < 40; j += 8) {
+  for (char j = 7; j < 40; j += 8) {
     nbuf[j] = '\0';
   }
   memcpy(buf, nbuf, 40);

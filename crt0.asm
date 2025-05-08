@@ -91,9 +91,14 @@ _fputc_cons_native:
     ;pop de
     ;pop af
 
-    ld hl, 2
-    add hl, sp ; get the address of the character
-    ld a, (hl)
+    ; Old method
+    ;ld hl, 2
+    ;add hl, sp ; get the address of the character
+    ;ld a, (hl)
+    ;call TRANSMIT_CHAR
+    ;ret
+
+    ; New method, this acts as a wrapper for the driver
     call TRANSMIT_CHAR
     ret
 

@@ -121,7 +121,7 @@ void sysc_rand(short *buf) __z88dk_fastcall {
   );
 }
 
-void sysc_sleep(short ms) {
+void sysc_sleep(short ms) __z88dk_fastcall {
   // TODO
 }
 

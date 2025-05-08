@@ -25,7 +25,7 @@ void sysc_puts(short len, char *str);
 void sysc_exec(short *addr) __z88dk_fastcall;
 void sysc_getinfo(char *str) __z88dk_fastcall;
 void sysc_rand(short *buf) __z88dk_fastcall;
-void sysc_sleep(short ms);
+void sysc_sleep(short ms) __z88dk_fastcall;
 void sysc_fork(void);
 void sysc_getpid(char *buf) __z88dk_fastcall;
 void sysc_getpcount(char *buf) __z88dk_fastcall;

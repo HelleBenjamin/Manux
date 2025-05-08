@@ -6,8 +6,8 @@
 
 #include "sys/syscall.h"
 
-char putchar(char c);
-char puts(char *s);
+char putchar(char c) __z88dk_fastcall;
+char puts(char *s) __z88dk_fastcall;
 char getchar(void);
 
 #endif
