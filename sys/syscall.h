@@ -18,8 +18,8 @@
 #define SYS_GETPCOUNT 11
 
 void sysc_exit(short code) __z88dk_fastcall;
-void sysc_write(short port, short len, char *str);
-void sysc_read(short port, short len, char *str);
+void sysc_write(char* filename, short count, char *buf);
+void sysc_read(char* filename, short count, char *buf);
 void sysc_gets(short len, char *str);
 void sysc_puts(short len, char *str);
 void sysc_exec(short *addr) __z88dk_fastcall;

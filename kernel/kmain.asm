@@ -10,6 +10,7 @@ SECTION code_home ; Home section is only used for the kernel
   EXTERN _main
   EXTERN SYSCALL_DISPATCH
   EXTERN INIT_TTY
+  EXTERN INIT_FS
 
   PUBLIC KERNEL_ENTRY
 
@@ -51,6 +52,9 @@ KERNEL_ENTRY:
 
   ; Initialize drivers
   CALL INIT_TTY
+
+  ; Initialize the filesystem
+  CALL INIT_FS
 
   ; Load syscall handler address
   LD HL, SYSCALL_VECTOR

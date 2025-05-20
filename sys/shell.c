@@ -23,26 +23,6 @@ void newline(void) {
 
 static struct utsname uutsname;
 
-void print_uint(unsigned short n) __z88dk_fastcall {
-  static unsigned short powers[] = {10000, 1000, 100, 10, 1};
-  short started = 0;
-
-  for (char i = 0; i < 5; ++i) {
-    char digit = 0;
-
-    while (n >= powers[i]) {
-      n -= powers[i];
-      ++digit;
-    }
-
-    if (digit > 0 || started || i == 4) {
-      char char_digit = '0' + digit;
-      putchar(char_digit);
-      started = 1;
-    }
-  }
-}
-
 char hextobyte(char *hex) __z88dk_fastcall {
   char byte = 0;
   if (hex[0] >= '0' && hex[0] <= '9') {
@@ -56,6 +36,33 @@ char hextobyte(char *hex) __z88dk_fastcall {
     byte += (hex[1] - 'A' + 10);
   }
   return byte;
+}
+
+void notepad(void) {
+  // Very Simple text editor
+  // You can remove this, if you want
+  puts("Simple text editor\n\r");
+  puts("1. Open file 2. New file");
+  char choice = 0;
+  read(STDIN_FILENO, &choice, 1);
+  static char filename[8] = {0};
+  static char buffer[256] = {0};
+  newline();
+  if (choice == '1') {
+    // Open file
+    puts("Enter filename: ");
+    read(STDIN_FILENO, &filename, 8);
+    sysc_read(filename, 256, buffer);
+    newline();
+    puts(buffer);
+    newline();
+  } else {
+    read(STDIN_FILENO, &buffer, 256);
+    puts("Enter filename: ");
+    read(STDIN_FILENO, &filename, 8);
+    newline();
+    sysc_write(filename, 256, buffer);
+  }
 }
 
 void z80ld() {
@@ -94,14 +101,23 @@ void terminal() {
     } else if (strcmp(command, "pid") == 0) {
       static char process_id = 0;
       sysc_getpid(&process_id);
-      print_uint(process_id);
+      putn(process_id);
       newline();
     } else if (strcmp(command, "pcount") == 0) {
       static char process_count = 0;
       sysc_getpcount(&process_count);
-      print_uint(process_count);
+      putn(process_count);
       newline();
-    } 
+    }/* else if (strcmp(command, "testwrite") == 0) { // Test only
+      static char *message = "Hello World!";
+      sysc_write("TESTFIL\0", strlen(message), message);
+    } else if (strcmp(command, "testread") == 0) {
+      static char buffer[32] = {0};
+      sysc_read("TESTFILE\0", 32, buffer);
+      puts(buffer);
+    }*/ else if (strcmp(command, "notepad") == 0) {
+      notepad();
+    }
     #if INCLUDE_USER_PROGRAMS
     // Add user program commands here
     else if (strcmp(command, "sal") == 0) {

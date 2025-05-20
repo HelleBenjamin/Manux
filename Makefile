@@ -8,7 +8,7 @@ CC := zcc
 BUILDDIR := build
 
 # Kernel sources. These all are required for a minimal kernel build
-KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
+KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm kernel/fs.asm drivers/tty.asm
 
 # System C sources
 CSRC := sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c

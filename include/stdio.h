@@ -9,5 +9,6 @@
 char putchar(char c) __z88dk_fastcall;
 char puts(char *s) __z88dk_fastcall;
 char getchar(void);
+void putn(unsigned short n) __z88dk_fastcall;
 
 #endif

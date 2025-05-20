@@ -68,7 +68,7 @@ void sysc_exit(short code) __z88dk_fastcall {
   );
 }
 
-void sysc_write(short port, short len, char *str) {
+void sysc_write(char* filename, short count, char *buf) {
   asm(
     "call _getparams3\n"
     "ld a, 1\n"
@@ -76,7 +76,7 @@ void sysc_write(short port, short len, char *str) {
   );
 }
 
-void sysc_read(short port, short len, char *str) {
+void sysc_read(char* filename, short count, char *buf) {
   asm(
     "call _getparams3\n"
     "ld a, 2\n"

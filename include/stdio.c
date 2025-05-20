@@ -32,3 +32,23 @@ char getchar(void) {
     "ld h, 0\n"
   );
 }
+
+void putn(unsigned short n) __z88dk_fastcall {
+  static unsigned short powers[] = {10000, 1000, 100, 10, 1};
+  short started = 0;
+
+  for (char i = 0; i < 5; ++i) {
+    char digit = 0;
+
+    while (n >= powers[i]) {
+      n -= powers[i];
+      ++digit;
+    }
+
+    if (digit > 0 || started || i == 4) {
+      char char_digit = '0' + digit;
+      putchar(char_digit);
+      started = 1;
+    }
+  }
+}

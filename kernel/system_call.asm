@@ -14,6 +14,8 @@ SECTION code_home
   EXTERN GET_PROCESS_ID
   EXTERN PUSH_PROCESS
   EXTERN POP_PROCESS
+  EXTERN WRITE_FILE
+  EXTERN READ_FILE
 
   EXTERN TRANSMIT_CHAR
   EXTERN RECEIVE_CHAR
@@ -33,16 +35,16 @@ SECTION code_home
 ;   Description: Exit current process
 ;
 ; 0x01 - SYS_WRITE
-;   BC = port
-;   DE - length
-;   HL - address
-;   Description: Write to port($0-$FFFF)
+;   BC = filename(will be replaced with file descriptor in the future)
+;   DE - count
+;   HL - buffer
+;   Description: Write to a file
 ;
 ; 0x02 - SYS_READ
-;   BC = port
-;   DE - length
-;   HL - address
-;   Description: Read from port($0-$FFFF)
+;   BC = filename
+;   DE - count
+;   HL - buffer
+;   Description: Read from a file
 ;
 ; 0x03 - SYS_GETS
 ;   DE - length
@@ -154,31 +156,15 @@ SYS_EXIT:
   CALL EXIT_PROCESS
   JP SYSCALL_END
 
-SYS_WRITE: ; TODO: Make this write to a file when fs is implemented
+SYS_WRITE:
   CALL GET_HL_SYSCALL
-  SYS_WRITE_LOOP: ; Main loop
-    LD A, (HL)
-    OUT (C), A
-    INC HL
-    XOR A
-    DEC DE
-    CP E
-    JR Z, SYS_WRITE_END ; Loop ends when length = 0
-    JR SYS_WRITE_LOOP
+  CALL WRITE_FILE
   SYS_WRITE_END: ; End loop
     JP SYSCALL_END
 
-SYS_READ: ; TODO: Make this read from a file when fs is implemented
+SYS_READ:
   CALL GET_HL_SYSCALL
-  SYS_READ_LOOP: ; Main loop
-    IN A, (C)
-    LD (HL), A
-    INC HL
-    XOR A
-    DEC DE
-    CP E
-    JR Z, SYS_READ_END ; Loop ends when length = 0
-    JR SYS_READ_LOOP
+  CALL READ_FILE
   SYS_READ_END: ; End loop
     JP SYSCALL_END
 
