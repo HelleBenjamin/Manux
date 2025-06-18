@@ -6,6 +6,5 @@
 
 void newline(void);
 void terminal();
-void main();
 
 #endif

@@ -1,10 +1,10 @@
 Manux
 =====
-Manux is an open-source, single-tasking and minimalist hobby kernel written in Z80 assembly and C. Currently, the kernel supports basic IO and monotasking, but new features will be added in the future, such as a file system. The kernel is designed to be loadable from BASIC. The kernel is written in a combination of Z80 assembly and C, and can be built with the z88dk toolchain. A minimal kernel can be built with any Z80 assembler, without including the C sources.
+Manux is an open-source, single-tasking and minimalist hobby kernel written in Z80 assembly and C. Currently, the kernel supports basic IO, monotasking and has a simple filesystem, but new features will be added in the future. The kernel is designed to be loadable to memory via BASIC "bootloader". The kernel is written in a combination of Z80 assembly and C, and can be built with the z88dk toolchain.
 
 System calls
 ============
-Programs can communicate with the kernel using system calls. System calls are implemented in assembly.
+Programs can communicate with the kernel using system calls. Syscalls are mostly implemented in assembly.
 
 The following system calls are implemented:
 
@@ -12,12 +12,12 @@ The following system calls are implemented:
     BC - exit code
 
   0x01 - sys_write
-    BC - port
+    BC - file descriptor
     DE - length
     HL - buffer
 
   0x02 - sys_read
-    BC - port
+    BC - file descriptor
     DE - length
     HL - buffer
 
@@ -49,6 +49,20 @@ The following system calls are implemented:
   0x0B - sys_getpcount
     HL - buffer
 
+  0x0C - sys_open
+    DE - filename
+    HL - buffer
+
+  0x0D - sys_close
+    HL - file descriptor
+
+  0x0E - sys_create
+    DE - filename
+
+  0x0F - sys_execs
+    DE - filename
+    HL - arg pointer
+
 See `kernel/system_call.asm` for more information
 
 POSIX support
@@ -57,20 +71,19 @@ Manux can run very simple POSIX programs. However, it's not fully POSIX-complian
 
 Minimum system requirements
 ===========================
-- Z80 CPU
-- 8K RAM
+- A Z80 CPU
+- 16K RAM(32K Recomended)
 - 8K ROM (not required if booting from BASIC)
 - a serial interface
 
 TODO
 ====
-- Better kernel loader for BASIC
-- Rework memory management
-- Minimal Z80 assembler(supports only the main instructions)
-- More POSIX features
-- More documentation
-- Compressed data in BASIC loader
-- A file system
+- [x] Better kernel loader for BASIC
+- [] Rework memory management
+- [] Minimal Z80 assembler(supports only the main instructions)
+- [] More POSIX features
+- [] More documentation
+- [x] A filesystem
 
 Tips for writing efficient code
 ===============================
@@ -78,21 +91,42 @@ Tips for writing efficient code
 - Use preincrement/decrement when possible
 - Write simplest code possible
 - Use only index registers when required
+- Use static variables when possible
+- Optimize the source code
+- Use `__z88dk_fastcall` when a function requires a single argument
 
 See z88dk documentation for more information
 
+How to write PIC(Position Independent Code)(TODO)
+===========================================
+- Use index register for accessing memory, for example: `ld a, (ix+1)`. The kernel doesn't use any index registers, so you can use them freely.
+- Calculate addresses at runtime
+- Use stack to store variables
+
 Pre-requisites
-=============
+==============
 - z88dk (preferably nightly builds)
 - make
 - kconfig-frontends-nox
 - linux
+- git
+- a serial interface
 
 Building
 ========
 Configure Manux using `kconfig-mconf Kconfig`.
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel.
-Use basicloader(bs) to load Manux from BASIC. The bs is tested on BASIC 4.7. Usage example: `./bs 45060 build/MANUX.rom MANUX.bas`
+You can also use the `kernel_load.asm` to load a small bootloader to BASIC, which can be used to load Manux from a binary file via serial interface. The serial uploading is tested on BASIC 4.7, but it should work with other versions of BASIC with/without minor modifications.
+Here's the steps to build Manux:
+1. `git clone https://github.com/HelleBenjamin/Manux.git`
+2. `cd Manux`
+3. `kconfig-mconf Kconfig` (optional)
+4. `make`
+5. `./upload.sh`
+
+Uploading the kernel to a real machine via serial interface
+===========================================================
+To upload the kernel to a real machine, you can use the `upload.sh` script. Before uploading, make sure you have the serial interface connected to your machine and reset the machine. When the machine asks for cold/warm boot, stop there. Disconnect all terminal sessions(eg. PuTTY) from the machine to ensure a successful upload. After the upload is complete, you can reconnect the terminal sessions and start using Manux.
 
 Contributing
 ============

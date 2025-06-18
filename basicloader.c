@@ -8,11 +8,11 @@
 
 int main(int argc, char **argv) {
   if (argc < 3) {
-    printf("Usage: %s <address> <input_file> <output_file>\n", argv[0]);
+    printf("Usage: %s <hex_address> <input_file> <output_file>\n", argv[0]);
     exit(1);
   }
 
-  char *address = argv[1]; // Address must be in decimal
+  char *hex_address = argv[1]; // Address must be in hexadecimal
 
   FILE *source = fopen(argv[2], "rb");
   if (source == NULL) {
@@ -37,11 +37,11 @@ int main(int argc, char **argv) {
   }
 
   int line = 10;
-  int addr = atoi(address);
+  int addr = (int)strtol(hex_address, NULL, 16); // Convert hex address to integer
   int size = file_size;
 
   // Main program
-  fprintf(output, "0 REM MANUX HEX LOADER FOR BASIC, SIZE: %d bytes\n", size);
+  fprintf(output, "0 REM MANUX HEX LOADER FOR BASIC 4.7, SIZE: %d bytes\n", size);
   fprintf(output, "1 POKE 32840-65536, 195\n"); // Subtract because BASIC treats numbers as signed
   fprintf(output, "2 POKE 32841-65536, %d\n", addr & 0xFF);
   fprintf(output, "3 POKE 32842-65536, %d\n", addr >> 8);
@@ -76,3 +76,4 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+

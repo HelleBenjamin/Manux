@@ -16,18 +16,26 @@
 #define SYS_FORK 9
 #define SYS_GETPID 10
 #define SYS_GETPCOUNT 11
+#define SYS_OPEN 12
+#define SYS_CLOSE 13
+#define SYS_CREATE 14
+#define SYS_EXECS 15
 
 void sysc_exit(short code) __z88dk_fastcall;
-void sysc_write(char* filename, short count, char *buf);
-void sysc_read(char* filename, short count, char *buf);
+void sysc_write(char fd, short count, char *buf);
+void sysc_read(char fd, short count, char *buf);
 void sysc_gets(short len, char *str);
 void sysc_puts(short len, char *str);
-void sysc_exec(short *addr) __z88dk_fastcall;
+void sysc_exec(short *addr) __z88dk_fastcall; // Executes address
 void sysc_getinfo(char *str) __z88dk_fastcall;
 void sysc_rand(short *buf) __z88dk_fastcall;
 void sysc_sleep(short ms) __z88dk_fastcall;
 void sysc_fork(void);
 void sysc_getpid(char *buf) __z88dk_fastcall;
 void sysc_getpcount(char *buf) __z88dk_fastcall;
+void sysc_open(char *name, char *buf);
+void sysc_close(char fd) __z88dk_fastcall;
+void sysc_create(char *name) __z88dk_fastcall;
+void sysc_execs(char *fname, char *arg); // Executes file with single argument
 
 #endif

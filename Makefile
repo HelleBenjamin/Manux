@@ -8,10 +8,10 @@ CC := zcc
 BUILDDIR := build
 
 # Kernel sources. These all are required for a minimal kernel build
-KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm kernel/fs.asm drivers/tty.asm
+KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
 
 # System C sources
-CSRC := sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c
+CSRC := kernel/kernel.c sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c sys/fs/mfs.c sys/fs/devfs.c sys/fd/fd.c
 
 # User programs
 USRC := user/sal.c
@@ -32,11 +32,24 @@ CC_CONFIG_FLAGS := $(shell \
   grep '^CONFIG_CC_' .config | sed 's/^CONFIG_CC_/-pragma-define:/' | sed 's/y$$/1/' | sed 's/n$$/0/' \
 )
 
+# Common flags for both assembler and compiler
+COMMON_CONFIG_FLAGS_AS += $(shell \
+	grep '^CONFIG_COMMON_' .config | sed 's/^CONFIG_COMMON_/-D/' | sed 's/y$$/1/' | sed 's/n$$/0/' \
+)
+COMMON_CONFIG_FLAGS_CC += $(shell \
+	grep '^CONFIG_COMMON_' .config | sed 's/^CONFIG_COMMON_/-pragma-define:/' | sed 's/y$$/1/' | sed 's/n$$/0/' \
+)
+
+# Add common flags to both assembler and compiler
+AS_CONFIG_FLAGS += $(COMMON_CONFIG_FLAGS_AS)
+CC_CONFIG_FLAGS += $(COMMON_CONFIG_FLAGS_CC)
+
+
 # Include user programs
 ifeq ($(filter -pragma-define:INCLUDE_USER_PROGRAMS=1, $(CC_CONFIG_FLAGS)), -pragma-define:INCLUDE_USER_PROGRAMS=1) 
 	INCLUDE_USR_PROGRAMS := 1
 	INC_USR_PG_ARG := -DINCLUDE_USER_PROGRAMS=1
-else 
+else
 	INCLUDE_USR_PROGRAMS := 0
 	INC_USR_PG_ARG :=
 endif
@@ -64,7 +77,7 @@ OUTPUT := build/MANUX.bin
 
 # Make build directory
 build:
-	mkdir -p build/kernel build/drivers build/sys build/include build/user
+	mkdir -p build/kernel build/drivers build/sys build/sys/fs build/sys/fd build/include build/user
 
 # Assembly files
 build/%.o: %.asm
@@ -82,9 +95,11 @@ else
 endif
 
 
-# Build the final binary
+# Build the final binary and bootloader
 MANUX: $(KOBJ) $(COBJ) $(UOBJ_COND)
-	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ_COND) $(CC_CONFIG_FLAGS) -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -pragma-define:SYSCALL_VECTOR=0xB000 -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
+	$(AS) $(AS_FLAGS) kernel_load.asm -b
+	./bs 0x9000 kernel_load.bin BOOT.bas
+	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ_COND) $(CC_CONFIG_FLAGS) -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
 
 # Clean the build directory
 clean:

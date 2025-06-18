@@ -2,6 +2,8 @@
 // Copyright (c) 2025 Benjamin Helle
 
 #include "stdio.h"
+#include "../sys/unistd.h"
+#include "../sys/syscall.h"
 #include <string.h>
 
 /*
@@ -21,6 +23,7 @@ char putchar(char c) __z88dk_fastcall{
 char puts(char *s) __z88dk_fastcall {
   short len = strlen(s);
   sysc_puts(len, s);
+  //sysc_write(STDOUT_FILENO, len, s); // Can also be used but it's slower
   return 0;
 }
 
@@ -33,6 +36,7 @@ char getchar(void) {
   );
 }
 
+// Print unsigned number
 void putn(unsigned short n) __z88dk_fastcall {
   static unsigned short powers[] = {10000, 1000, 100, 10, 1};
   short started = 0;
@@ -47,6 +51,19 @@ void putn(unsigned short n) __z88dk_fastcall {
 
     if (digit > 0 || started || i == 4) {
       char char_digit = '0' + digit;
+      putchar(char_digit);
+      started = 1;
+    }
+  }
+}
+
+// Print unsigned number as hex
+void puth(unsigned short n) __z88dk_fastcall {
+  char started = 0;
+  for (short i = 12; i >= 0; i -= 4) {
+    char digit = (n >> i) & 0xF;
+    if (digit > 0 || started || i == 0) {
+      char char_digit = (digit < 10) ? ('0' + digit) : ('A' + digit - 10);
       putchar(char_digit);
       started = 1;
     }

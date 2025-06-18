@@ -5,6 +5,10 @@
 #include "unistd.h"
 #include "utsname.h"
 #include "syscall.h"
+#include "fs/mfs.h"
+#include "fs/devfs.h"
+#include "fd/fd.h"
+#include "../kernel/kernel.h"
 #include <string.h>
 #include "../include/stdio.h"
 
@@ -18,13 +22,12 @@
 */
 
 void newline(void) {
-  write(STDOUT_FILENO, "\n\r", 2);
+  puts("\n\r");
 }
 
-static struct utsname uutsname;
-
-char hextobyte(char *hex) __z88dk_fastcall {
-  char byte = 0;
+/*char hextobyte(char *hex) __z88dk_fastcall {
+  static char byte;
+  byte = 0;
   if (hex[0] >= '0' && hex[0] <= '9') {
     byte += (hex[0] - '0') << 4;
   } else if (hex[0] >= 'A' && hex[0] <= 'F') {
@@ -36,54 +39,33 @@ char hextobyte(char *hex) __z88dk_fastcall {
     byte += (hex[1] - 'A' + 10);
   }
   return byte;
-}
+}*/
 
-void notepad(void) {
-  // Very Simple text editor
-  // You can remove this, if you want
-  puts("Simple text editor\n\r");
-  puts("1. Open file 2. New file");
-  char choice = 0;
-  read(STDIN_FILENO, &choice, 1);
-  static char filename[8] = {0};
-  static char buffer[256] = {0};
-  newline();
-  if (choice == '1') {
-    // Open file
-    puts("Enter filename: ");
-    read(STDIN_FILENO, &filename, 8);
-    sysc_read(filename, 256, buffer);
-    newline();
-    puts(buffer);
-    newline();
-  } else {
-    read(STDIN_FILENO, &buffer, 256);
-    puts("Enter filename: ");
-    read(STDIN_FILENO, &filename, 8);
-    newline();
-    sysc_write(filename, 256, buffer);
-  }
-}
+/*void z80ld() {
+  // Very small Z80 program loader, loads hex code to a file and executes it
+  // Create files
+  sysc_create("Z80PROG"); // File to hold program
+  create_file("Z80ASM "); // Executable program
 
-void z80ld() {
-  // Very small Z80 program loader, loads hex code to 0xF000 and executes it
-  char *program = (char *)0xF000;
-  static char pg[0xFF]; // increase size if needed
-  read(STDIN_FILENO, &pg, 0xFF);
-  for (char i = 0; i < 0xFF; ++i) {
-    program[i] = hextobyte(&pg[i * 2]);
+  char *program = get_file_blockptr("Z80PROG"); // Get block pointers
+  char *program_exec = get_file_blockptr("Z80ASM ");
+
+  read(STDIN_FILENO, program, 0xFF); // Read hex code to file
+  for (unsigned char i = 0; i < 0xFF; ++i) {
+    program_exec[i] = hextobyte(&program[i * 2]); // Convert hex to bytes
   }
-  newline();
-  fork();
-  sysc_exec((short *)0xF000);
-}
+  newline(); // Newline for fun
+  fork(); // Fork the process, new process will execute the program
+  sysc_execs("Z80ASM ", "0123456789"); // Execute the program
+
+}*/
 
 void terminal() {
-  static char command[32] = {0};
+  static char command[32];
   while (1) {
     memset(command, 0, 32);
     puts("> ");
-    read(STDIN_FILENO, &command, 32);
+    read(STDIN_FILENO, &command, 32); // Use fixed length read instead of gets. gets may result in buffer overflow
     newline();
     if (strcmp(command, "exit") == 0) {
       _exit(0);
@@ -94,11 +76,11 @@ void terminal() {
       puts(uutsname.version);
       puts(uutsname.machine);
       newline();
-    } else if (strcmp(command, "z80ld") == 0) {
+    }/* else if (strcmp(command, "z80ld") == 0) {
       z80ld();
-    } else if (strcmp(command, "clear") == 0) {
+    }*/ else if (strcmp(command, "clear") == 0) {
       putchar(0x0C);
-    } else if (strcmp(command, "pid") == 0) {
+    } else if (strcmp(command, "pid") == 0) { // Debugging
       static char process_id = 0;
       sysc_getpid(&process_id);
       putn(process_id);
@@ -108,15 +90,30 @@ void terminal() {
       sysc_getpcount(&process_count);
       putn(process_count);
       newline();
-    }/* else if (strcmp(command, "testwrite") == 0) { // Test only
-      static char *message = "Hello World!";
-      sysc_write("TESTFIL\0", strlen(message), message);
-    } else if (strcmp(command, "testread") == 0) {
-      static char buffer[32] = {0};
-      sysc_read("TESTFILE\0", 32, buffer);
-      puts(buffer);
-    }*/ else if (strcmp(command, "notepad") == 0) {
-      notepad();
+    } else if (strcmp(command, "lsdev") == 0) {
+      print_devices();
+    } else if (strcmp(command, "ls") == 0) {
+      list_files();
+    } else if (strcmp(command, "rdump") == 0) { // Debugging
+      asm("extern REG_DUMP\ncall REG_DUMP");
+    } /*else if (strcmp(command, "test") == 0) { // Debugging, writes a test file and reads it
+      sysc_create("TESTFIL");
+      char testfd;
+      sysc_open("TESTFIL", &testfd);
+      char *testmsg = "Hello World!\n\r";
+      sysc_write(testfd, strlen(testmsg), testmsg);
+      char testbuf[32] = {0};
+      sysc_read(testfd, strlen(testmsg), testbuf);
+      sysc_write(STDOUT_FILENO, strlen(testbuf), testbuf);
+    }*/ else if (strncmp(command, "cat ", 4) == 0) {
+      char *filename = command + 4;
+      char *filebuf = get_file_blockptr(filename);
+      if (filebuf != NULL) {
+        read_file(filename, get_file_size(filename), filebuf);
+        sysc_write(STDOUT_FILENO, get_file_size(filename), filebuf);
+      } else {
+        puts("File not found\n\r");
+      }
     }
     #if INCLUDE_USER_PROGRAMS
     // Add user program commands here
@@ -128,14 +125,4 @@ void terminal() {
       puts("Unknown command\n\r");
     }
   }
-}
-
-void main() {
-  uname(&uutsname); // Get system information
-  puts(uutsname.sysname);
-  puts(uutsname.release);
-  newline();
-  fork();
-  sysc_exec((short *)terminal);
-  _exit(0);
 }

@@ -123,7 +123,7 @@ GET_FILE_BLOCKS:
   ;Returns:
   ; A - block count
 
-  ; This basicly translates the count to blocks
+  ; This basically translates the count to blocks
 
   PUSH DE ; Save regs
   PUSH HL

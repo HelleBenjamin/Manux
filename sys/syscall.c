@@ -2,6 +2,11 @@
 // Copyright (c) 2025 Benjamin Helle
 
 #include "syscall.h"
+#include "../include/stdio.h"
+#include "fs/devfs.h"
+#include "fs/mfs.h"
+#include "fd/fd.h"
+#include "unistd.h"
 
 /*
   Assembly syscall wrapper for C
@@ -68,21 +73,34 @@ void sysc_exit(short code) __z88dk_fastcall {
   );
 }
 
-void sysc_write(char* filename, short count, char *buf) {
-  asm(
-    "call _getparams3\n"
-    "ld a, 1\n"
-    "call SYSCALL_DISPATCH"
-  );
+void sysc_write(char fd, short count, char *buf) {
+  if (fd == STDOUT_FILENO) {
+    sysc_puts(count, buf);
+  } else if (fd == 0xFF) return; // Return if fd is null
+  else {
+    // TODO: Implement writing to multiple blocks
+    unsigned short *addr;
+    fd_get(fd, NULL, &addr); // Get the address where to write
+    for (unsigned short i = 0; i < count; ++i) {
+      addr[i] = buf[i];
+    }
+  }
 }
 
-void sysc_read(char* filename, short count, char *buf) {
-  asm(
-    "call _getparams3\n"
-    "ld a, 2\n"
-    "call SYSCALL_DISPATCH"
-  );
+void sysc_read(char fd, short count, char *buf) {
+  if (fd == STDIN_FILENO) {
+    sysc_gets(count, buf);
+  } else if (fd == 0xFF) return; // Return if fd is null
+  else {
+    // TODO: Implement reading from multiple blocks
+    unsigned short *addr;
+    fd_get(fd, &addr, NULL); // Get the address where to read
+    for (unsigned short i = 0; i < count; ++i) {
+      buf[i] = addr[i];
+    }
+  }
 }
+
 
 void sysc_gets(short len, char *str) {
   asm(
@@ -142,6 +160,26 @@ void sysc_getpid(char *buf) __z88dk_fastcall {
 void sysc_getpcount(char *buf) __z88dk_fastcall {
   asm(
     "ld a, 11\n"
+    "call SYSCALL_DISPATCH"
+  );
+}
+
+void sysc_open(char *name, char *buf) {
+  *buf = fd_create(name);
+}
+
+void sysc_close(char fd) __z88dk_fastcall {
+  fd_close(fd);
+}
+
+void sysc_create(char *name) __z88dk_fastcall {
+  create_file(name);
+}
+
+void sysc_execs(char *fname, char *arg) {
+  asm(
+    "call _getparams2\n"
+    "ld a, 15\n"
     "call SYSCALL_DISPATCH"
   );
 }

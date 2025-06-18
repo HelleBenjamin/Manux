@@ -35,13 +35,13 @@ SECTION code_home
 ;   Description: Exit current process
 ;
 ; 0x01 - SYS_WRITE
-;   BC = filename(will be replaced with file descriptor in the future)
+;   BC = file descriptor
 ;   DE - count
 ;   HL - buffer
 ;   Description: Write to a file
 ;
 ; 0x02 - SYS_READ
-;   BC = filename
+;   BC = file descriptor
 ;   DE - count
 ;   HL - buffer
 ;   Description: Read from a file
@@ -69,8 +69,8 @@ SECTION code_home
 ;   Description: Get random number
 ;
 ; 0x08 - SYS_SLEEP
-;   BC - sleep time
-;   Description: Sleep for BC ms
+;   HL - sleep time
+;   Description: Sleep for HL ms
 ;
 ; 0x09 - SYS_FORK
 ;   Description: Clone current process to new process
@@ -83,15 +83,28 @@ SECTION code_home
 ;   HL - pointer to buffer
 ;   Description: Get process count
 ;
+; 0x0C - SYS_OPEN
+;   DE - filename
+;   HL - pointer to buffer which will hold the file descriptor
+;   Description: Open a file
+;
+; 0x0D - SYS_CLOSE
+;   HL - file descriptor
+;   Description: Close a file descriptor
+;
+; 0x0E - SYS_CREATE
+;   HL - filename
+;   Description: Create a file
+;
+; 0x0F - SYS_EXECS
+;   DE - filename
+;   HL - argument pointer
+;   Description: Execute a file with single argument
 
 SYSCALL_DISPATCH:
-
+  ; Switch to kernelspace
   LD (USER_SP), SP
   LD SP, (KERNEL_SP)
-  PUSH HL
-  LD HL, KERNEL_FLAGS
-  RES 1, (HL)
-  POP HL
 
   ; Check if syscall is valid. We always want to check if something is valid with a jump table.
   PUSH HL
@@ -134,11 +147,7 @@ SYSCALL_END:
   POP BC
   POP AF
 
-  ; Switch to usermode
-  PUSH HL
-  LD HL, KERNEL_FLAGS
-  SET 1, (HL)
-  POP HL
+  ; Switch to userspace
   LD SP, (USER_SP)
 
   RET
@@ -157,18 +166,32 @@ SYS_EXIT:
   JP SYSCALL_END
 
 SYS_WRITE:
+  EXTERN _sysc_write
   CALL GET_HL_SYSCALL
-  CALL WRITE_FILE
+  PUSH BC ; Push args
+  PUSH DE
+  PUSH HL
+  CALL _sysc_write ; Call C function
+  POP HL ; Cleanup
+  POP DE
+  POP BC
   SYS_WRITE_END: ; End loop
     JP SYSCALL_END
 
 SYS_READ:
+  EXTERN _sysc_read
   CALL GET_HL_SYSCALL
-  CALL READ_FILE
+  PUSH BC ; Push args
+  PUSH DE
+  PUSH HL
+  CALL _sysc_read ; Call C function
+  POP HL ; Cleanup
+  POP DE
+  POP BC
   SYS_READ_END: ; End loop
     JP SYSCALL_END
 
-SYS_GETS:
+SYS_GETS: ; Buffer overflow safe gets
   CALL GET_HL_SYSCALL
   SYS_GETS_LOOP: ; Main loop
     CALL RECEIVE_CHAR
@@ -213,14 +236,14 @@ SYS_PUTS:
     JP SYSCALL_END
 
 SYS_EXEC: ; Executes the program at the address in HL
-
-  LD HL, KERNEL_FLAGS
-  SET 1, (HL)
+  LD (TMP_REG2), SP ; Save current SP
   LD SP, (USER_SP)
+  LD HL, (TMP_REG1)
+  POP BC ; Pop old return address
+  PUSH HL ; Push new return address
+  LD SP, (TMP_REG2) ; Restore old SP so we can restore registers
 
-  CALL GET_HL_SYSCALL
-
-  JP (HL)
+  JP SYSCALL_END
 
 SYS_GETINFO:
   CALL GET_HL_SYSCALL
@@ -259,10 +282,41 @@ SYS_GETPCOUNT:
   LD (HL), A
   JP SYSCALL_END
 
+SYS_OPEN:
+  EXTERN _sysc_open
+  CALL GET_HL_SYSCALL
+  PUSH DE
+  PUSH HL
+  CALL _sysc_open
+  POP HL
+  POP DE
+  JP SYSCALL_END
+
+SYS_CLOSE:
+  EXTERN _sysc_close
+  CALL GET_HL_SYSCALL
+  CALL _sysc_close ; Call C function, uses __z88dk_fastcall so the arg is in HL
+  JP SYSCALL_END
+
+SYS_CREATE:
+  EXTERN _sysc_create
+  CALL GET_HL_SYSCALL
+  CALL _sysc_create ; Call C function, uses __z88dk_fastcall so the arg is in HL
+  JP SYSCALL_END
+
+SYS_EXECS:
+  LD (TMP_REG2), SP ; Save current SP
+  LD SP, (USER_SP)
+  LD HL, (TMP_REG1) ; Get the argument(HL)
+  POP BC ; Pop old return address
+  PUSH DE ; Push the argument
+  PUSH HL ; Push new return address
+  LD SP, (TMP_REG2) ; Restore old SP so we can restore registers
+
+  JP SYSCALL_END
 
 SECTION DATA
 SYSCALL_TABLE:
-
   dw SYS_EXIT
   dw SYS_WRITE
   dw SYS_READ
@@ -275,3 +329,7 @@ SYSCALL_TABLE:
   dw SYS_FORK
   dw SYS_GETPID
   dw SYS_GETPCOUNT
+  dw SYS_OPEN
+  dw SYS_CLOSE
+  dw SYS_CREATE
+  dw SYS_EXECS

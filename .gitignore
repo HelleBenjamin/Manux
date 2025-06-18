@@ -3,3 +3,5 @@
 MANUX.bas
 bs
 sal
+kernel_load.o
+kernel_load.bin

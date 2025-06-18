@@ -11,6 +11,14 @@ menu "Manux Kernel Configuration"
             help 
             "The address where the system ram starts"
 
+        config COMMON_KERNEL_WORKSPACE
+            hex "The address where the kernel workspace starts"
+            default 0x9000
+            range 0x0000 0xFFFF
+            prompt "Set the kernel workspace start address"
+            help 
+            "The address where the kernel workspace starts. The workspace holds important kernel variables and data structures."
+
         menu "Stack Configuration"
             config AS_STACK_START
                 hex
@@ -42,7 +50,7 @@ menu "Manux Kernel Configuration"
             config CC_HEAP_ADDRESS
                 depends on CC_ENABLE_HEAP
                 hex "The address of the kernel heap"
-                default 0xD000
+                default 0xE000
                 range 0x0000 0xFFFF
                 prompt "Set the kernel heap address"
                 help
@@ -58,29 +66,29 @@ menu "Manux Kernel Configuration"
             default y
             prompt "Enable z88dk's stdio"
             help
-            "Enable z88dk's stdio"
+            "Enable z88dk's stdio. May be required for some programs."
         config CC_CRT_MODEL
             hex "Data compression model"
             default 2
             range 0 3
             prompt "Set the data compression model"
             help
-            "Data compression model"
+            "Data compression model used for ROM data. See z88dk documentation for more information."
 
     endmenu
 
     menu "Kernel Options"
-        config CC_CRT_ORG_CODE
+        config COMMON_CRT_ORG_CODE
             hex "The address where the kernel code starts"
-            default 0xB004
+            default 0xA004
             range 0x0000 0xFFFF
             prompt "Set the kernel start address."
             help
-            "The address where the kernel starts. Note: 4 bytes are reserved for syscall call vector."
+            "The address where the kernel starts. Note: 4 bytes are reserved for syscall vector(JP Callee + 1 align byte)."
 
         config CC_CRT_ORG_BSS
             hex "The address where the kernel bss starts"
-            default 0xC000
+            default 0xD000
             range 0x0000 0xFFFF
             prompt "Set the kernel bss start address."
             help
@@ -93,9 +101,9 @@ menu "Manux Kernel Configuration"
             help
             "The clock frequency in kHz"
 
-        config AS_SYSCALL_VECTOR
+        config COMMON_SYSCALL_VECTOR
             hex
-            default 0xB000
+            default 0xA000
             range 0x0000 0xFFFF
             prompt "Set the syscall vector"
             help
@@ -104,11 +112,11 @@ menu "Manux Kernel Configuration"
         menu "Processes"
             config AS_MAX_PROCESSES
                 hex
-                default 0x05
+                default 0x08
                 range 0x00 0xFF
                 prompt "Set the maximum number of processes"
                 help
-                "The maximum number of processes"
+                "The maximum number of processes that can be created"
 
         endmenu
     endmenu
@@ -121,13 +129,13 @@ menu "Manux Kernel Configuration"
                 range 0x00 0xFF
                 prompt "Set the TTY port"
                 help
-                "The TTY port"
+                "The TTY port which is used by the TTY driver for serial communication"
             config AS_USE_RST
                 bool
                 default n
                 prompt "Use custom RST vectors"
                 help
-                "Use custom RST vectors to input/output"
+                "Use custom RESET vectors to input and output characters"
 
         endmenu
     endmenu

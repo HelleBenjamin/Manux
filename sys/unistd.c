@@ -8,19 +8,17 @@ void _exit(short code) {
   sysc_exit(code);
 }
 
-ssize_t read(int fd, void *buf, size_t count) {
+unsigned short read(int fd, void *buf, unsigned short count) {
   if (fd == STDIN_FILENO) {
     sysc_gets(count, (char *)buf);
-  }
-  // TODO: Handle other file descriptors when they are implemented
+  } else sysc_write(fd, count, (char *)buf);
   return count;
 }
 
-ssize_t write(int fd, const void *buf, size_t count) {
+unsigned short write(int fd, const void *buf, unsigned short count) {
   if (fd == STDOUT_FILENO) {
     sysc_puts(count, (char *)buf);
-  }
-  // TODO: Handle other file descriptors when they are implemented
+  } else sysc_read(fd, count, (char *)buf);
   return count;
 }
 
@@ -33,4 +31,9 @@ pid_t getpid(void) {
   char buf = 0;
   sysc_getpid(&buf);
   return buf;
+}
+
+short close(int fd) {
+  sysc_close(fd);
+  return 0;
 }
