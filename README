@@ -9,7 +9,7 @@ Programs can communicate with the kernel using system calls. Syscalls are mostly
 The following system calls are implemented:
 
   0x00 - sys_exit
-    BC - exit code
+    HL - exit code
 
   0x01 - sys_write
     BC - file descriptor
@@ -36,22 +36,22 @@ The following system calls are implemented:
     HL - buffer
 
   0x07 - sys_rand
-    HL - buffer
+    returns word in HL
 
   0x08 - sys_sleep(unimplemented)
-    BC - milliseconds
+    HL - milliseconds
 
   0x09 - sys_fork
 
   0x0A - sys_getpid
-    HL - buffer
+    returns current PID in HL
 
   0x0B - sys_getpcount
-    HL - buffer
+    returns process count in HL
 
   0x0C - sys_open
     DE - filename
-    HL - buffer
+    returns file descriptor in HL
 
   0x0D - sys_close
     HL - file descriptor

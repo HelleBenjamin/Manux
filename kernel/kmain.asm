@@ -13,6 +13,8 @@ SECTION code_home ; Home section is only used for the kernel
 
   PUBLIC KERNEL_ENTRY
   PUBLIC REG_DUMP
+  PUBLIC MINIMAL_PUTS
+  PUBLIC STACKTRACE
 
 
   ; Kernel flags
@@ -43,12 +45,11 @@ SECTION code_home ; Home section is only used for the kernel
   ; ----------
 
 KERNEL_ENTRY:
-  PUSH HL
   LD HL, 0
   ADD HL, SP
   LD SP, KERNEL_STACK ; Set kernel stack
   PUSH HL ; Save old sp
-  LD (KERNEL_SP), SP ; Save kernel sp, this also saves the old sp
+  LD (KERNEL_SP), SP ; Save kernel sp
 
   ; Initialize drivers
   CALL INIT_TTY
@@ -63,24 +64,27 @@ KERNEL_ENTRY:
   LD (HL), D ; Now the syscall address is at address defined by SYSCALL_VECTOR
 
   ; Set syscall count
-  LD A, $0E
+  LD A, $10 ; 16 syscalls
   LD (SYSCALL_COUNT), A
+
+  XOR A ; Clear A
 
   ; Load kernel flags
   LD HL, KERNEL_FLAGS
-  LD (HL), 0 ; Initialize all to 0
+  LD (HL), A ; Initialize all to 0
   SET 0, (HL) ; Set echo
 
-  ; Create process stack at 0xAF00
+  LD HL, PROC_COUNT ; Zero the process count
+  LD (HL), A
+
+  ; Create process stack
   LD HL, PROCESS_STACK
   LD (PROCESS_SP), HL
 
-  ; Create user stack at 0xA500
+  ; Create user stack
   LD HL, USER_STACK
   LD (USER_SP), HL
 
-  LD HL, PROC_COUNT ; Zero the process count
-  LD (HL), 0
 
   ; Load userspace
   LD SP, (USER_SP)
@@ -99,7 +103,6 @@ KERNEL_ENTRY:
 
   POP HL ; Restore old sp
   LD SP, HL
-  POP HL
   RET ; Return back to BASIC or whatever called KERNEL_ENTRY
 
 
@@ -114,6 +117,15 @@ MINIMAL_PUTS:
   JP MINIMAL_PUTS
 REG_DUMP:
   EXTERN _puth
+  ; Save the registers
+  PUSH AF
+  PUSH BC
+  PUSH DE
+  PUSH HL
+  PUSH IX
+  PUSH IY
+
+  ; Push the registers that we want to print
   PUSH IY
   PUSH IX
   PUSH HL
@@ -144,15 +156,57 @@ REG_DUMP:
   CALL MINIMAL_PUTS
   POP HL
   CALL _puth
+  LD HL, REG_SP
+  CALL MINIMAL_PUTS
+  LD HL, 0
+  ADD HL, SP ; Get current stack pointer
+  CALL _puth ; Print the stack pointer
+  ; Restore the registers
+  POP IY
+  POP IX
+  POP HL
+  POP DE
+  POP BC
+  POP AF
   RET
+
+STACKTRACE: ; C = depth
+  PUSH BC ; Save depth
+  PUSH HL ; Save HL
+  LD HL, STACKTRACE_MSG
+  EXTERN TRANSMIT_CHAR
+  CALL MINIMAL_PUTS ; Print the stacktrace message
+  LD HL, 0
+  ADD HL, SP ; Get current stack pointer
+  ST_LOOP:
+    LD E, (HL) ; Get low byte
+    INC HL
+    LD D, (HL) ; Get high byte
+    INC HL
+    EX DE, HL ; HL = value
+    PUSH BC ; Save depth
+    PUSH HL ; Save HL
+    CALL _puth ; Print the hex value
+    EX DE, HL ; Restore HL
+    LD A, ' '
+    CALL TRANSMIT_CHAR
+    POP HL
+    POP BC ; Restore depth
+    DEC C ; Decrease depth
+    JR NZ, ST_LOOP ; If depth is not zero, loop
+    POP HL
+    POP BC
+    RET
 
 ; Don't remove this
 INCLUDE "kernel/kernel.inc"
 
 ; Debugging, feel free to remove, this is just for testing
 SECTION data_home
+STACKTRACE_MSG:
+  db "Stacktrace: ", 0
 REG_AF:
-  db "AF: ", 0
+  db " AF: ", 0
 REG_BC:
   db " BC: ", 0
 REG_DE:
@@ -163,3 +217,5 @@ REG_IX:
   db " IX: ", 0
 REG_IY:
   db " IY: ", 0
+REG_SP:
+  db " SP: ", 0

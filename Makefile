@@ -54,10 +54,10 @@ else
 	INC_USR_PG_ARG :=
 endif
 
-# Compile flags, -SO2 is recommended, use -SO3 for larger programs
+# Compile flags, -O2 is recommended, use -O3 for larger programs
 # Remove --Cc-unsigned if not working
 # Add -startup=3 if not working 
-CC_FLAGS := +z80 -SO2 -Cc-unsigned -clib=classic -compiler=sccz80 $(INC_USR_PG_ARG) -Wall
+CC_FLAGS := +z80 -O2 -Cc-unsigned -clib=classic -compiler=sccz80 $(INC_USR_PG_ARG) -Wall
 AS_FLAGS := -mz80 $(AS_CONFIG_FLAGS)
 
 # Another set of compile flags, currently unused
@@ -104,3 +104,6 @@ MANUX: $(KOBJ) $(COBJ) $(UOBJ_COND)
 # Clean the build directory
 clean:
 	rm -rf build
+
+disasm:
+	z88dk-dis -mz80 -o 0xA004 -x $(BUILDDIR)/MANUX.map $(BUILDDIR)/MANUX.rom > MANUX.asm

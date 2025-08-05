@@ -11,32 +11,30 @@ SECTION code_home
   PUBLIC POP_PROCESS
   
 CREATE_PROCESS:
-  PUSH HL
-  PUSH AF
+  PUSH HL ; Save HL
+  PUSH AF ; Save AF
   LD HL, PROC_COUNT
   LD A, MAX_PROCESSES
   CP (HL)
-  JP Z, CREATE_PROCESS_END
-  INC (HL)
+  JR Z, CREATE_PROCESS_END ; If process count is at max, return
+  INC (HL) ; Else increment
   CREATE_PROCESS_END:
-  POP AF
-  POP HL
+  POP AF ; Restore AF
+  POP HL ; Restore HL
 
   CALL NZ, PUSH_PROCESS
 
   RET
 
 EXIT_PROCESS:
+  ; No need to save registers, they are restored in POP_PROCESS
   LD HL, PROC_COUNT
-  DEC (HL)
+  OR A, A
+  CP (HL)
+  RET Z ; If no processes, return
+  DEC (HL) ; Else decrement
 
   CALL POP_PROCESS ; Pop the process from process stack
-
-  PUSH HL
-  LD HL, KERNEL_FLAGS
-  SET 1, (HL)
-  POP HL
-  LD SP, (USER_SP)
 
   RET
 
@@ -51,15 +49,13 @@ GET_PROCESS_ID:
 PUSH_PROCESS:
 
   LD (TMP_REG1), HL ; Save current HL
-  LD HL, 0
-  ADD HL, SP
-  LD (TMP_REG2), HL ; Save current SP
+  LD (TMP_REG2), SP ; Save current SP
 
   LD SP, (PROCESS_SP) ; Load process stack pointer
 
   LD HL, (TMP_REG1) ; Restore HL
 
-  ; Reserve old process registers
+  ; Save old process registers
   PUSH AF
   PUSH BC
   PUSH DE
@@ -88,16 +84,14 @@ PUSH_PROCESS:
 
 
 POP_PROCESS: ; Returns: AF, BC, DE, HL, SP, TMP3(Return address)
-  LD HL, 0
-  ADD HL, SP
-  LD (TMP_REG1), HL ; Save kernel SP
+  LD (TMP_REG1), SP ; Save kernel SP
 
   LD SP, (PROCESS_SP) ; Load process stack pointer
 
-  POP AF ; Pop the pid and exit code
+  POP HL ; Pop the pid and exit code
 
   POP HL ; Return address in HL
-  LD (TMP_REG3), HL
+  ;LD (TMP_REG3), HL ; Save it for later
 
   POP HL ; Now the old stack pointer is in HL
   LD (USER_SP), HL ; Set the user stack pointer to the just popped one

@@ -130,14 +130,8 @@ char write_file(char* fname, short count, char *buf) {
 
 char create_file(char *fname) {
   unsigned short *block = find_free_block();
-  if (block == NULL) { // Exit if no free block
+  if (block == NULL || *filecount >= MAX_FILES || find_file(fname) != NULL) { // Throw error
     return 0xFF; // No free blocks 
-  }
-  if (*filecount > MAX_FILES) {
-    return 0xFF; // No free files
-  }
-  if (find_file(fname) != NULL) {
-    return 0xFF; // File Already Exists, add file overwrite?
   }
 
   // TODO: Add file overwrite, add file deletion, make a function that looks for free file entry
@@ -145,7 +139,7 @@ char create_file(char *fname) {
   strncpy(files[*filecount].name, &fname[0], MAX_FILE_NAME_LENGTH); // Copy file name
   files[*filecount].used = 1; // Set file entry to used
   files[*filecount].size = 0; // Initialize to 0
-  files[*filecount].block_size = 0;
+  files[*filecount].block_size = 1; // Set block size to 1 (first block)
   files[*filecount].block_ptr = block; // Copy the file block
 
   block[0] = 1; // Set block to used

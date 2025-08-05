@@ -25,43 +25,16 @@ void newline(void) {
   puts("\n\r");
 }
 
-/*char hextobyte(char *hex) __z88dk_fastcall {
-  static char byte;
-  byte = 0;
-  if (hex[0] >= '0' && hex[0] <= '9') {
-    byte += (hex[0] - '0') << 4;
-  } else if (hex[0] >= 'A' && hex[0] <= 'F') {
-    byte += (hex[0] - 'A' + 10) << 4;
-  }
-  if (hex[1] >= '0' && hex[1] <= '9') {
-    byte += (hex[1] - '0');
-  } else if (hex[1] >= 'A' && hex[1] <= 'F') {
-    byte += (hex[1] - 'A' + 10);
-  }
-  return byte;
-}*/
-
-/*void z80ld() {
-  // Very small Z80 program loader, loads hex code to a file and executes it
-  // Create files
-  sysc_create("Z80PROG"); // File to hold program
-  create_file("Z80ASM "); // Executable program
-
-  char *program = get_file_blockptr("Z80PROG"); // Get block pointers
-  char *program_exec = get_file_blockptr("Z80ASM ");
-
-  read(STDIN_FILENO, program, 0xFF); // Read hex code to file
-  for (unsigned char i = 0; i < 0xFF; ++i) {
-    program_exec[i] = hextobyte(&program[i * 2]); // Convert hex to bytes
-  }
-  newline(); // Newline for fun
-  fork(); // Fork the process, new process will execute the program
-  sysc_execs("Z80ASM ", "0123456789"); // Execute the program
-
-}*/
+void testfunc() {
+  puts("Test function called\n\r");
+  _exit(3);
+}
 
 void terminal() {
-  static char command[32];
+  puts(uutsname.sysname);
+  puts(uutsname.release);
+  newline();
+  static char command[32]; // Use fixed size array for command input
   while (1) {
     memset(command, 0, 32);
     puts("> ");
@@ -70,24 +43,18 @@ void terminal() {
     if (strcmp(command, "exit") == 0) {
       _exit(0);
     } else if (strcmp(command, "uname") == 0) {
-      puts(uutsname.sysname);
-      puts(uutsname.nodename);
-      puts(uutsname.release);
-      puts(uutsname.version);
-      puts(uutsname.machine);
+      syscall(SYS_PUTS, (char *)uutsname, 40, 0);
       newline();
-    }/* else if (strcmp(command, "z80ld") == 0) {
-      z80ld();
-    }*/ else if (strcmp(command, "clear") == 0) {
+    } else if (strcmp(command, "clear") == 0) {
       putchar(0x0C);
     } else if (strcmp(command, "pid") == 0) { // Debugging
       static char process_id = 0;
-      sysc_getpid(&process_id);
+      process_id = syscall(SYS_GETPID, 0, 0, 0); // Get process ID
       putn(process_id);
       newline();
     } else if (strcmp(command, "pcount") == 0) {
       static char process_count = 0;
-      sysc_getpcount(&process_count);
+      process_count = syscall(SYS_GETPCOUNT, 0, 0, 0); // Get process count
       putn(process_count);
       newline();
     } else if (strcmp(command, "lsdev") == 0) {
@@ -96,24 +63,30 @@ void terminal() {
       list_files();
     } else if (strcmp(command, "rdump") == 0) { // Debugging
       asm("extern REG_DUMP\ncall REG_DUMP");
-    } /*else if (strcmp(command, "test") == 0) { // Debugging, writes a test file and reads it
-      sysc_create("TESTFIL");
-      char testfd;
-      sysc_open("TESTFIL", &testfd);
-      char *testmsg = "Hello World!\n\r";
-      sysc_write(testfd, strlen(testmsg), testmsg);
-      char testbuf[32] = {0};
-      sysc_read(testfd, strlen(testmsg), testbuf);
-      sysc_write(STDOUT_FILENO, strlen(testbuf), testbuf);
-    }*/ else if (strncmp(command, "cat ", 4) == 0) {
-      char *filename = command + 4;
-      char *filebuf = get_file_blockptr(filename);
-      if (filebuf != NULL) {
-        read_file(filename, get_file_size(filename), filebuf);
-        sysc_write(STDOUT_FILENO, get_file_size(filename), filebuf);
-      } else {
-        puts("File not found\n\r");
+    }/* else if (strcmp("test", command) == 0) {
+      static char pg[] = {0x3E, 0x4F, 0xCF, 0x3E, 0x4B, 0xCF, 0x3E, 0x00, 0x2E, 0x03, 0xCD, 0x00, 0xA0}; // Example program in hex
+      create_file("TESTEXE");
+      write_file("TESTEXE", sizeof(pg), pg); // test program
+      short *ptr = get_file_blockptr("TESTEXE");
+      if (ptr == NULL) {
+        puts("Failed to get file block pointer\n\r");
+        continue;
       }
+      ptr += 4; // Skip header
+      for (unsigned char i = 0; i < sizeof(pg); i++) {
+        puth(ptr[i]);
+      }
+      fork(); // Fork the process
+      putn(syscall(SYS_EXECS, NULL, "TESTEXE", 0)); // Execute the program
+      //syscall(SYS_EXEC, (short *)ptr, 0, 0); // works with (short *)pg, but not with ptr
+    }*/ else if (strcmp("ret", command) == 0) {
+      _exit(0); // Exit the shell
+    } else if (strcmp("ec", command) == 0) {
+      puth(*(unsigned short *)EXIT_CODE); // Print exit code
+      newline();
+    } else if (strcmp("testfunc", command) == 0) {
+      fork(); // Fork the process
+      syscall(SYS_EXEC, (short *)testfunc, 0, 0); // Execute test function
     }
     #if INCLUDE_USER_PROGRAMS
     // Add user program commands here
@@ -126,3 +99,4 @@ void terminal() {
     }
   }
 }
+

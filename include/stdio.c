@@ -22,7 +22,7 @@ char putchar(char c) __z88dk_fastcall{
   
 char puts(char *s) __z88dk_fastcall {
   short len = strlen(s);
-  sysc_puts(len, s);
+  syscall(SYS_PUTS, s, len, 0); // Use syscall to write string
   //sysc_write(STDOUT_FILENO, len, s); // Can also be used but it's slower
   return 0;
 }

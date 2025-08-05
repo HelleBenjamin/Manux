@@ -50,6 +50,10 @@ int main(int argc, char **argv) {
   fprintf(output, "6 POKE I, A\n");
   fprintf(output, "7 NEXT I\n");
 
+  printf("Writing %d bytes to BASIC file...\n", i);
+  printf("Size: %d bytes, Address: 0x%X\n", size, addr);
+  printf("Writing from 0x%04X to 0x%04X\n", addr, addr + size - 1);
+
   int dataWritten = 0;
   while (dataWritten < i) { // Write the data
     int lineLen = 9; // Including %d DATA

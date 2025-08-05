@@ -7,7 +7,7 @@
 
 short uname(struct utsname *buf) __z88dk_fastcall{
   static char nbuf[40]; // name buffer
-  sysc_getinfo(nbuf);
+  syscall(SYS_GETINFO, (char *)nbuf, 40, 0); // Get system information
   for (unsigned char j = 7; j < 40; j += 8) {
     nbuf[j] = '\0';
   }

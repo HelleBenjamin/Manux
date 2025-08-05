@@ -39,15 +39,14 @@ echo "Sending $KERNEL to $SERIAL_PORT at $BAUD_RATE baud..."
 cat "$KERNEL" > "$SERIAL_PORT"
 
 # Adjust delays if needed
-sleep 1
+#sleep 1
 
 # End sequence, must always be 0xEDAD
 printf "\xED\xAD" > "$SERIAL_PORT"
-
-sleep 1
+echo "Done uploading $BOOTLD and $KERNEL to $SERIAL_PORT at $BAUD_RATE baud."
+#sleep 1
 
 # Close port
 stty -F "$SERIAL_PORT" -crtscts
 
-echo "Done uploading $BOOTLD and $KERNEL to $SERIAL_PORT at $BAUD_RATE baud."
-
+#picocom --baud $BAUD_RATE --flowcontrol  $SERIAL_PORT

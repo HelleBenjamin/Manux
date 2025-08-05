@@ -12,12 +12,20 @@
 // This holds the system information
 struct utsname uutsname;
 
-void main(void) { // Root process, this initializes the kernel
+
+int main(void) { // Root process, this initializes the kernel
   uname(&uutsname); // Get system information
   mfs_init(); // Init filesystem
   fd_init(); // Init file descriptors
   devfs_init(); // Init device filesystem
   fork(); // Create new process for shell
-  sysc_exec((short *)terminal); // Make it execute shell
+  syscall(SYS_EXEC, (short *)terminal, 0, 0); // Execute terminal
+  while (1) {
+    // This is the root process, it should never exit
+    // If it exits, the system will crash
+    // So we just wait here
+    asm ("nop\n");
+  }
   _exit(0); // Exit with code 0(success)
+  return 0;
 }

@@ -19,7 +19,7 @@ PROCESS_SP        EQU KERNEL_WORKSPACE+6
 SYSCALL_COUNT     EQU KERNEL_WORKSPACE+8
 KERNEL_FLAGS      EQU KERNEL_WORKSPACE+10
 PROC_COUNT        EQU KERNEL_WORKSPACE+12
-TEMP_SP           EQU KERNEL_WORKSPACE+14
+EXIT_CODE         EQU KERNEL_WORKSPACE+14
 
 ; Temporal registers
 TMP_REG1          EQU KERNEL_WORKSPACE+16
@@ -58,8 +58,8 @@ FD_ENTRY_SIZE     EQU 5
 SECTION DATA
 
 SYSINFO:
-  db "Manux   Z80-PC   0.2    release  Z80   ", 0
-  ;db "Manux   Z80-PC   0.3    dev      Z80   ", 0
+  ;db "Manux   Z80-PC   0.2-1  release  Z80   ", 0
+  db "Manux   Z80-PC   0.3    dev      Z80   ", 0
 MSG: ; Secret message
   db "Hellord", 0DH, 0AH, 0
 

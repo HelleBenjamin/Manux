@@ -5,35 +5,32 @@
 #include "syscall.h"
 
 void _exit(short code) {
-  sysc_exit(code);
+  syscall(SYS_EXIT, code, 0, 0);
 }
 
 unsigned short read(int fd, void *buf, unsigned short count) {
   if (fd == STDIN_FILENO) {
-    sysc_gets(count, (char *)buf);
-  } else sysc_write(fd, count, (char *)buf);
+    syscall(SYS_GETS, (char *)buf, count , 0);
+  } else syscall(SYS_READ, (char *)buf, count, fd);
   return count;
 }
 
 unsigned short write(int fd, const void *buf, unsigned short count) {
   if (fd == STDOUT_FILENO) {
-    sysc_puts(count, (char *)buf);
-  } else sysc_read(fd, count, (char *)buf);
+    syscall(SYS_PUTS, (char *)buf, count, 0);
+  } else syscall(SYS_WRITE, (char *)buf, count, fd);
   return count;
 }
 
 pid_t fork(void) {
-  sysc_fork();
+  syscall(SYS_FORK, 0, 0, 0);
   return 0;
 }
 
 pid_t getpid(void) {
-  char buf = 0;
-  sysc_getpid(&buf);
-  return buf;
+  return syscall(SYS_GETPID, 0, 0, 0);
 }
 
 short close(int fd) {
-  sysc_close(fd);
-  return 0;
+  return syscall(SYS_CLOSE, fd, 0, 0);
 }

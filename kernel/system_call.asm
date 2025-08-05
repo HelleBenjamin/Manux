@@ -14,24 +14,30 @@ SECTION code_home
   EXTERN GET_PROCESS_ID
   EXTERN PUSH_PROCESS
   EXTERN POP_PROCESS
+  EXTERN _create_process
   EXTERN WRITE_FILE
   EXTERN READ_FILE
 
   EXTERN TRANSMIT_CHAR
   EXTERN RECEIVE_CHAR
 
+  EXTERN REG_DUMP
+  EXTERN STACKTRACE
+  EXTERN _get_file_blockptr
+
 ; Important! System calls must be called from user mode
 ; System Call Argument registers:
 ; AF - Syscall number
-; BC - Syscall argument 1
+; BC - Syscall argument 3
 ; DE - Syscall argument 2 
-; HL - Syscall argument 3
+; HL - Syscall argument 1
+; -- Syscall return value is in HL
 ;-------------
 ; SYSTEM CALLS
 ; ------------
 ;
 ; 0x00 - SYS_EXIT
-;   BC = Exit code
+;   HL = Exit code
 ;   Description: Exit current process
 ;
 ; 0x01 - SYS_WRITE
@@ -65,8 +71,7 @@ SECTION code_home
 ;   Description: Get system information, the buffer should be at least 32 bytes
 ;
 ; 0x07 - SYS_RAND
-;   HL - pointer to buffer
-;   Description: Get random number
+;   Description: Return a random number in HL
 ;
 ; 0x08 - SYS_SLEEP
 ;   HL - sleep time
@@ -76,17 +81,14 @@ SECTION code_home
 ;   Description: Clone current process to new process
 ;
 ; 0x0A - SYS_GETPID
-;   HL - pointer to buffer
-;   Description: Get current process id
+;   Description: Get current process id, returns in HL
 ;
 ; 0x0B - SYS_GETPCOUNT
-;   HL - pointer to buffer
-;   Description: Get process count
+;   Description: Get process count, returns in HL
 ;
 ; 0x0C - SYS_OPEN
 ;   DE - filename
-;   HL - pointer to buffer which will hold the file descriptor
-;   Description: Open a file
+;   Description: Open a file, returns file descriptor in HL
 ;
 ; 0x0D - SYS_CLOSE
 ;   HL - file descriptor
@@ -121,7 +123,7 @@ SYSCALL_DISPATCH:
   
   ; Calculate address
   LD (TMP_REG1), HL ; Save HL
-  PUSH DE
+  PUSH DE ; Save DE
   LD HL, SYSCALL_TABLE
   SLA A ; Multiply by 2
   LD D, 0
@@ -132,12 +134,16 @@ SYSCALL_DISPATCH:
   LD D, (HL) ; Now the address is in DE
   LD HL, 0
   ADD HL, DE ; HL = syscall address
-  POP DE
+  POP DE ; Restore DE
   
   JP (HL) ; Execute the syscall
 
 GET_HL_SYSCALL:
   LD HL, (TMP_REG1)
+  RET
+
+SAVE_RET:
+  LD (TMP_REG2), HL ; Save return value
   RET
 
 SYSCALL_END:
@@ -146,6 +152,9 @@ SYSCALL_END:
   POP DE
   POP BC
   POP AF
+
+  LD HL, (TMP_REG2) ; Return value
+  SYSCALL_END_SKIP: ; Skip popping the registers
 
   ; Switch to userspace
   LD SP, (USER_SP)
@@ -162,8 +171,10 @@ ECHO_CHAR:
   RET
 
 SYS_EXIT:
+  CALL GET_HL_SYSCALL ; Get exit code
+  LD (EXIT_CODE), HL ; Save exit code
   CALL EXIT_PROCESS
-  JP SYSCALL_END
+  JP SYSCALL_END_SKIP
 
 SYS_WRITE:
   EXTERN _sysc_write
@@ -236,13 +247,12 @@ SYS_PUTS:
     JP SYSCALL_END
 
 SYS_EXEC: ; Executes the program at the address in HL
-  LD (TMP_REG2), SP ; Save current SP
+  CALL GET_HL_SYSCALL ; Get HL
+  LD (TMP_REG3), SP ; Save current SP
   LD SP, (USER_SP)
-  LD HL, (TMP_REG1)
   POP BC ; Pop old return address
   PUSH HL ; Push new return address
-  LD SP, (TMP_REG2) ; Restore old SP so we can restore registers
-
+  LD SP, (TMP_REG3) ; Restore old SP so we can restore registers
   JP SYSCALL_END
 
 SYS_GETINFO:
@@ -254,9 +264,12 @@ SYS_GETINFO:
   JP SYSCALL_END
 
 SYS_RAND:
-  CALL GET_HL_SYSCALL
   LD A, R ; Get the random number from the refresh register
-  LD (HL), A
+  LD L, A ; Store it in L
+  LD A, R
+  XOR L ; XOR it with the previous value
+  LD H, A ; Store it in H
+  CALL SAVE_RET ; Save the return value
   JP SYSCALL_END
 
 SYS_SLEEP:
@@ -266,53 +279,69 @@ SYS_SLEEP:
     JP SYSCALL_END
 
 SYS_FORK: ; Clones the process but does not execute
-  CALL GET_HL_SYSCALL
+  CALL GET_HL_SYSCALL ; Get HL for saving its state in the process stack
   CALL CREATE_PROCESS
   JP SYSCALL_END
 
 SYS_GETPID:
   CALL GET_HL_SYSCALL
-  CALL GET_PROCESS_ID
-  LD (HL), A
+  CALL GET_PROCESS_ID ; Get the process ID
+  LD L, A ; Store it in L
+  LD H, 0 ; Set high byte to 0
+  CALL SAVE_RET
   JP SYSCALL_END
 
 SYS_GETPCOUNT:
   CALL GET_HL_SYSCALL
-  LD A, (PROC_COUNT)
-  LD (HL), A
+  LD HL, (PROC_COUNT)
+  CALL SAVE_RET
   JP SYSCALL_END
 
 SYS_OPEN:
-  EXTERN _sysc_open
+  EXTERN _fd_create
   CALL GET_HL_SYSCALL
-  PUSH DE
-  PUSH HL
-  CALL _sysc_open
-  POP HL
-  POP DE
+  CALL _fd_create ; Call C function
+  LD H, 0
+  CALL SAVE_RET ; (H)L = file descriptor number
   JP SYSCALL_END
 
 SYS_CLOSE:
-  EXTERN _sysc_close
+  EXTERN _fd_close
   CALL GET_HL_SYSCALL
-  CALL _sysc_close ; Call C function, uses __z88dk_fastcall so the arg is in HL
+  CALL _fd_close ; Call C function
+  LD H, 0
+  CALL SAVE_RET ; (H)L = error code
   JP SYSCALL_END
 
 SYS_CREATE:
-  EXTERN _sysc_create
+  EXTERN _fd_create
   CALL GET_HL_SYSCALL
-  CALL _sysc_create ; Call C function, uses __z88dk_fastcall so the arg is in HL
+  CALL _fd_create ; Call C function
+  LD H, 0
+  CALL SAVE_RET ; (H)L = error code
   JP SYSCALL_END
 
 SYS_EXECS:
-  LD (TMP_REG2), SP ; Save current SP
+  ; Needs to be tested
+  CALL GET_HL_SYSCALL ; Get HL
+  EX HL, DE ; Get the filename pointer in HL, HL = filename, DE = argument pointer
+  CALL _get_file_blockptr ; Get the file block pointer, should return address in HL
+  LD A, H ; Check if null
+  OR L
+  JP Z, SYS_EXECS_FAIL ; If not found, return
+  LD (TMP_REG3), SP ; Save current SP
   LD SP, (USER_SP)
-  LD HL, (TMP_REG1) ; Get the argument(HL)
+  LD BC, 4 ; Skip the first 4 bytes of the file block(header)
+  ADD HL, BC ; HL = new return address
   POP BC ; Pop old return address
   PUSH DE ; Push the argument
   PUSH HL ; Push new return address
-  LD SP, (TMP_REG2) ; Restore old SP so we can restore registers
-
+  LD (USER_SP), SP ; Save new SP
+  LD SP, (TMP_REG3) ; Restore old SP so we can restore registers
+  JP SYSCALL_END
+SYS_EXECS_FAIL:
+  LD HL, 0x0001 ; Set error
+  CALL SAVE_RET ; Save return value
   JP SYSCALL_END
 
 SECTION DATA
