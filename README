@@ -40,7 +40,7 @@ See `include/sys/unistd.h` for currently supported functions.
 
 Minimum system requirements
 ===========================
-Manux supports bemu80 as the offical target machine. It's going to be ported to other machines in the future when the kernel becomes stable.
+Manux supports bemu80(https://github.com/HelleBenjamin/bemu80) as the offical target machine. It's going to be ported to other machines in the future when the kernel becomes stable.
 
 - A Z80 CPU
 - 56K RAM
