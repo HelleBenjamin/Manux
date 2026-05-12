@@ -17,7 +17,7 @@
 ; Some general scope declarations
 ;-------
 
-    EXTERN    KERNEL_ENTRY           ;main() is always external to crt0 code
+    EXTERN    _main           ;main() is always external to crt0 code
     PUBLIC    __Exit         ;jp'd to by exit()
     PUBLIC    l_dcal          ;jp(hl)
 
@@ -63,7 +63,7 @@ start:
 
 
     ; Entry to the user code
-    call    KERNEL_ENTRY
+    jp    _main
     ; Exit code is in hl
 __Exit:
     ; crt0_exit any resources

@@ -5,7 +5,7 @@ menu "Manux Kernel Configuration"
 
         config AS_RAM_START
             hex "The address where the system ram starts"
-            default 0x8000
+            default 0x2000
             range 0x0000 0xFFFF
             prompt "Set the system ram start address"
             help 
@@ -13,16 +13,16 @@ menu "Manux Kernel Configuration"
 
         config COMMON_KERNEL_WORKSPACE
             hex "The address where the kernel workspace starts"
-            default 0x9000
+            default 0x2000
             range 0x0000 0xFFFF
             prompt "Set the kernel workspace start address"
             help 
             "The address where the kernel workspace starts. The workspace holds important kernel variables and data structures."
 
         menu "Stack Configuration"
-            config AS_STACK_START
+            config COMMON_REGISTER_SP
                 hex
-                default 0xF000
+                default 0xFFFF
                 range 0x0000 0xFFFF
                 prompt "Set the stack start address"
                 help 
@@ -50,7 +50,7 @@ menu "Manux Kernel Configuration"
             config CC_HEAP_ADDRESS
                 depends on CC_ENABLE_HEAP
                 hex "The address of the kernel heap"
-                default 0xE000
+                default 0xF000
                 range 0x0000 0xFFFF
                 prompt "Set the kernel heap address"
                 help
@@ -69,30 +69,46 @@ menu "Manux Kernel Configuration"
             "Enable z88dk's stdio. May be required for some programs."
         config CC_CRT_MODEL
             hex "Data compression model"
-            default 2
+            default 1
             range 0 3
             prompt "Set the data compression model"
             help
-            "Data compression model used for ROM data. See z88dk documentation for more information."
+            "Data compression model used for ROM data. See the z88dk documentation for more information."
+
+        config COMMON_CRT_ENABLE_RST
+            hex
+            default 0x96
+            range 0x00 0xff
+            prompt "Set the rst vector bitmask"
+            help
+            "0x02 = RST 0x08, 0x04 = RST 0x10, etc.."
 
     endmenu
 
     menu "Kernel Options"
         config COMMON_CRT_ORG_CODE
             hex "The address where the kernel code starts"
-            default 0xA004
+            default 0x0000
             range 0x0000 0xFFFF
             prompt "Set the kernel start address."
             help
             "The address where the kernel starts. Note: 4 bytes are reserved for syscall vector(JP Callee + 1 align byte)."
 
-        config CC_CRT_ORG_BSS
+        config COMMON_CRT_ORG_BSS
             hex "The address where the kernel bss starts"
-            default 0xD000
+            default 0x2A00
             range 0x0000 0xFFFF
             prompt "Set the kernel bss start address."
             help
             "The address where the kernel bss starts."
+
+        config COMMON_CRT_ORG_DATA
+            hex "The address where the kernel data starts"
+            default -1
+            range 0x0000 0xFFFF
+            prompt "Set the kernel data start address."
+            help
+            "The address where the kernel data starts."
 
         config COMMON_CLK_FREQ
             hex "The clock frequency in kHz"
@@ -101,52 +117,29 @@ menu "Manux Kernel Configuration"
             help
             "The clock frequency in kHz"
 
-        config COMMON_SYSCALL_VECTOR
-            hex
-            default 0xA000
-            range 0x0000 0xFFFF
-            prompt "Set the syscall vector"
-            help
-            "The address where syscalls are called from"
-
-        menu "Processes"
-            config AS_MAX_PROCESSES
-                hex
-                default 0x08
-                range 0x00 0xFF
-                prompt "Set the maximum number of processes"
-                help
-                "The maximum number of processes that can be created"
-
         endmenu
     endmenu
 
     menu "Drivers"
         menu "TTY"
-            config AS_TTY_PORT
+            config COMMON_STDIO_PORT
                 hex
                 default 0x81
                 range 0x00 0xFF
-                prompt "Set the TTY port"
+                prompt "Set the TTY(stdio) port"
                 help
                 "The TTY port which is used by the TTY driver for serial communication"
-            config AS_USE_RST
-                bool
-                default n
-                prompt "Use custom RST vectors"
-                help
-                "Use custom RESET vectors to input and output characters"
 
         endmenu
     endmenu
 
-    menu "User Programs"
-        config CC_INCLUDE_USER_PROGRAMS
+    menu "Target"
+        config COMMON_TARGET_BEMU80
             bool
             default y
-            prompt "Include user programs"
+            prompt "Build for the bemu80 emulator target"
             help
-            "Include user programs. Note: this will make the build bigger."
+            "Build for the bemu80 emulator target. This is the default target."
     endmenu
 
 endmenu

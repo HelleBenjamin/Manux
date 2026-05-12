@@ -1,24 +1,31 @@
-all: clean build MANUX
+all: build MANUX
 
 # Assembler and compiler. We'll use zcc and z80asm for now
-AS := z80asm
+AS := z88dk-z80asm
 CC := zcc
 
 # The build directory
 BUILDDIR := build
 
-# Kernel sources. These all are required for a minimal kernel build
-KSRC := kernel/kmain.asm kernel/proc.asm kernel/system_call.asm drivers/tty.asm
+# Kernel assembly sources
+KSRC := kernel/kmain.asm kernel/system_call.asm driver/disk.asm
 
-# System C sources
-CSRC := kernel/kernel.c sys/syscall.c sys/unistd.c sys/utsname.c sys/shell.c include/stdio.c sys/fs/mfs.c sys/fs/devfs.c sys/fd/fd.c
+# Kernel C sources
+CSRC := kernel/kernel.c kernel/kstdio.c driver/tty.c fs/mfs.c fs/fd.c
 
-# User programs
-USRC := user/sal.c
+# Manux POSIX sources
+POSIX_SRC := sys/syscall.c sys/utsname.c sys/unistd/read.c sys/unistd/write.c sys/unistd/close.c sys/unistd/_exit.c sys/unistd/execl.c sys/unistd/open.c
 
+# User sources
+USRC := sys/shell.c
+
+# Objects
 KOBJ = $(KSRC:%.asm=build/%.o)
 COBJ = $(CSRC:%.c=build/%.o)
 UOBJ = $(USRC:%.c=build/%.o)
+
+# POSIX library
+POBJ = $(POSIX_SRC:%.c=build/%.o)
 
 # Extract flags from .config file
 
@@ -45,19 +52,11 @@ AS_CONFIG_FLAGS += $(COMMON_CONFIG_FLAGS_AS)
 CC_CONFIG_FLAGS += $(COMMON_CONFIG_FLAGS_CC)
 
 
-# Include user programs
-ifeq ($(filter -pragma-define:INCLUDE_USER_PROGRAMS=1, $(CC_CONFIG_FLAGS)), -pragma-define:INCLUDE_USER_PROGRAMS=1) 
-	INCLUDE_USR_PROGRAMS := 1
-	INC_USR_PG_ARG := -DINCLUDE_USER_PROGRAMS=1
-else
-	INCLUDE_USR_PROGRAMS := 0
-	INC_USR_PG_ARG :=
-endif
-
 # Compile flags, -O2 is recommended, use -O3 for larger programs
 # Remove --Cc-unsigned if not working
 # Add -startup=3 if not working 
-CC_FLAGS := +z80 -O2 -Cc-unsigned -clib=classic -compiler=sccz80 $(INC_USR_PG_ARG) -Wall
+# with sccz80 around 5100 bytes
+CC_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy --max-allocs-per-node100000 -Wall -Iinclude
 AS_FLAGS := -mz80 $(AS_CONFIG_FLAGS)
 
 # Another set of compile flags, currently unused
@@ -77,7 +76,7 @@ OUTPUT := build/MANUX.bin
 
 # Make build directory
 build:
-	mkdir -p build/kernel build/drivers build/sys build/sys/fs build/sys/fd build/include build/user
+	mkdir -p build/kernel build/driver build/sys build/fs build/include build/user build/sys/unistd
 
 # Assembly files
 build/%.o: %.asm
@@ -87,23 +86,45 @@ build/%.o: %.asm
 build/%.o: %.c
 	$(CC) $(CC_FLAGS) -c $< -o $@
 
-# User programs
-ifeq ($(INCLUDE_USR_PROGRAMS),1)
-  UOBJ_COND := $(UOBJ)
-else
-  UOBJ_COND :=
-endif
-
 
 # Build the final binary and bootloader
-MANUX: $(KOBJ) $(COBJ) $(UOBJ_COND)
-	$(AS) $(AS_FLAGS) kernel_load.asm -b
-	./bs 0x9000 kernel_load.bin BOOT.bas
-	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(UOBJ_COND) $(CC_CONFIG_FLAGS) -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
+MANUX: $(KOBJ) $(COBJ)
+  # Add final flags here, -Cz"--rombase=0x0000 --romsize=0x2000"
+	$(CC) $(CC_FLAGS) $(KOBJ) $(COBJ) $(CC_CONFIG_FLAGS) -pragma-define:CRT_INTERRUPT_MODE=1 -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-include:kernel/kernel.inc -crt0=$(CRT0) -create-app -m -bn $(OUTPUT)
+
+posix_lib: build $(POBJ)
+	$(AS) -xlibposix.lib $(POBJ)
+	mv libposix.lib $(BUILDDIR)/
+
+mfs-util:
+	gcc -O2 mfs-util.c -o mfs-util
+
+disk: # 1.44mb image, floppy as reference
+	dd if=/dev/zero of=disk.img bs=512 count=2880
+
+# userland utilities eg. shell
+CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy --max-allocs-per-node200000 -Wall -Iinclude -L$(BUILDDIR) -llibposix -pragma-define:CRT_ENABLE_EIDI=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-define:CRT_MODEL=0x1 -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CLIB_STDIO_HEAP_SIZE=0 -pragma-define:CLIB_MALLOC_HEAP_SIZE=0 -pragma-define:CRT_ORG_BSS=-1 -pragma-define:CRT_ENABLE_CLOSE=0 -pragma-define:CRT_ORG_DATA=-1 -pragma-define:REGISTER_SP=-1 -nostdlib -m -pragma-define:ENABLE_STDIO=0 -create-app
+user-utils: disk mfs-util posix_lib
+	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3000 sys/shell.c -o $(BUILDDIR)/SHELL.bin
+	mv $(BUILDDIR)/SHELL.rom $(BUILDDIR)/SHELL.BIN
+	./mfs-util -s $(BUILDDIR)/SHELL.BIN -fd disk.img
+	./mfs-util -s TEST.BIN -fd disk.img
+
+disk-copy:
+# only copy the binaries
+	./mfs-util -s $(BUILDDIR)/SHELL.BIN -fd disk.img
+	./mfs-util -s TEST.BN -fd disk.img
+	./mfs-util -s $(BUILDDIR)/Z80ASM.BIN -fd disk.img
 
 # Clean the build directory
 clean:
 	rm -rf build
 
 disasm:
-	z88dk-dis -mz80 -o 0xA004 -x $(BUILDDIR)/MANUX.map $(BUILDDIR)/MANUX.rom > MANUX.asm
+	z88dk-dis -mz80 -o 0x0000 -x $(BUILDDIR)/MANUX.map $(BUILDDIR)/MANUX.rom > MANUX.asm
+
+disasm-shell:
+	z88dk-dis -mz80 -o 0x3000 -x SHELL.map SHELL.bin > SHELL.asm
+
+emulate:
+	bemu80 --rom $(BUILDDIR)/MANUX.rom --fd disk.img

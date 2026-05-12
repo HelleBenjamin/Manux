@@ -1,5 +1,5 @@
-; SPDX-License-Identifier: GPL-2.0-or-later
-; Copyright (c) 2025 Benjamin Helle
+; SPDX-License-Identifier: GPL-2.0-only
+; Copyright (c) 2025-2026 Benjamin Helle
 ;
 ; kmain.asm
 ; Assembly kernel for Manux
@@ -27,45 +27,17 @@ SECTION code_home ; Home section is only used for the kernel
   ; bit 6 - unused
   ; bit 7 - unused
 
-  ; TODO: Rework the memory, i'll do it later
   ; Memory map
-  ; ----------
-  ; | 0xFFFF |
-  ; | 0xF000 |
-  ; | 0xE000 |
-  ; | 0xD000 |
-  ; | 0xC000 | BSS section ^
-  ; | 0xB004 | Kernel ^
-  ; | 0xB000 | Syscall call vector
-  ; | 0xA500 | OS Stack V
-  ; | 0xA000 |
-  ; | 0x9000 |
-  ; | 0x8000 | BASIC WORKSPACE ^
-  ; | 0x0000 | BASIC ROM
-  ; ----------
+  ; 0x0000 - 0x1FFF Kernel ROM
+  ; 0x2000 - 0x2FFF Kernel Workspace(fd table, etc)
+  ; 0x3000 - 0x3FFF Init/Shell area(loaded by the kernel)
+  ; 0x4000 - 0xEFFF User program area
+  ; 0xF000 - 0xFFFF Stack, buffers, etc
 
+  PUBLIC _main
+_main:
 KERNEL_ENTRY:
-  LD HL, 0
-  ADD HL, SP
-  LD SP, KERNEL_STACK ; Set kernel stack
-  PUSH HL ; Save old sp
-  LD (KERNEL_SP), SP ; Save kernel sp
-
-  ; Initialize drivers
-  CALL INIT_TTY
-
-  ; Load syscall handler address
-  LD HL, SYSCALL_VECTOR
-  LD DE, SYSCALL_DISPATCH
-  LD (HL), $C3 ; JP
-  INC HL
-  LD (HL), E
-  INC HL
-  LD (HL), D ; Now the syscall address is at address defined by SYSCALL_VECTOR
-
-  ; Set syscall count
-  LD A, $10 ; 16 syscalls
-  LD (SYSCALL_COUNT), A
+  ; assumes that SP already set
 
   XOR A ; Clear A
 
@@ -74,49 +46,37 @@ KERNEL_ENTRY:
   LD (HL), A ; Initialize all to 0
   SET 0, (HL) ; Set echo
 
-  LD HL, PROC_COUNT ; Zero the process count
-  LD (HL), A
+  ld (KERNEL_SP), sp
 
-  ; Create process stack
-  LD HL, PROCESS_STACK
-  LD (PROCESS_SP), HL
+  extern _kernel_main
+  JP _kernel_main ; Jump to kernel main
 
-  ; Create user stack
-  LD HL, USER_STACK
-  LD (USER_SP), HL
+  JR _kernel_panic ; Kernel should never return
 
+  PUBLIC _kernel_panic
+_kernel_panic:
+  LD HL, KP_MSG
+  CALL MINIMAL_PUTS
+  CALL REG_DUMP
 
-  ; Load userspace
-  LD SP, (USER_SP)
-
-  ; Create root process(main)
-  LD A, 9
-  CALL SYSCALL_VECTOR ; Fork
-
-  LD HL, _main ; Load address of main
-  LD A, 5
-  CALL SYSCALL_VECTOR  ; Exec
-
-  ; Switch to kernelspace
-  LD (USER_SP), SP
-  LD SP, (KERNEL_SP)
-
-  POP HL ; Restore old sp
-  LD SP, HL
-  RET ; Return back to BASIC or whatever called KERNEL_ENTRY
+KP_LOOP:
+  JR KP_LOOP
 
 
-; Debugging, feel free to remove, this is just for testing 
+  PUBLIC exec_init_jump
+exec_init_jump:
+  ld sp, SHELL_STACK
+  jp 0x3000
+
 MINIMAL_PUTS:
-  EXTERN TRANSMIT_CHAR
   LD A, (HL)
   OR A
   RET Z
-  CALL TRANSMIT_CHAR
+  OUT ($81), A
   INC HL
-  JP MINIMAL_PUTS
+  JR MINIMAL_PUTS
 REG_DUMP:
-  EXTERN _puth
+  EXTERN _kputh
   ; Save the registers
   PUSH AF
   PUSH BC
@@ -135,32 +95,32 @@ REG_DUMP:
   LD HL, REG_AF
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_BC
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_DE
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_HL
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_IX
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_IY
   CALL MINIMAL_PUTS
   POP HL
-  CALL _puth
+  CALL _kputh
   LD HL, REG_SP
   CALL MINIMAL_PUTS
   LD HL, 0
   ADD HL, SP ; Get current stack pointer
-  CALL _puth ; Print the stack pointer
+  CALL _kputh ; Print the stack pointer
   ; Restore the registers
   POP IY
   POP IX
@@ -186,10 +146,10 @@ STACKTRACE: ; C = depth
     EX DE, HL ; HL = value
     PUSH BC ; Save depth
     PUSH HL ; Save HL
-    CALL _puth ; Print the hex value
+    CALL _kputh ; Print the hex value
     EX DE, HL ; Restore HL
     LD A, ' '
-    CALL TRANSMIT_CHAR
+    RST 0x08
     POP HL
     POP BC ; Restore depth
     DEC C ; Decrease depth
@@ -201,8 +161,6 @@ STACKTRACE: ; C = depth
 ; Don't remove this
 INCLUDE "kernel/kernel.inc"
 
-; Debugging, feel free to remove, this is just for testing
-SECTION data_home
 STACKTRACE_MSG:
   db "Stacktrace: ", 0
 REG_AF:

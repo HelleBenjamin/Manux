@@ -1,16 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025 Benjamin Helle
 
-#include "utsname.h"
-#include "syscall.h"
-#include <string.h>
+#include <sys/utsname.h>
+#include <sys/syscall.h>
 
-short uname(struct utsname *buf) __z88dk_fastcall{
-  static char nbuf[40]; // name buffer
-  syscall(SYS_GETINFO, (char *)nbuf, 40, 0); // Get system information
-  for (unsigned char j = 7; j < 40; j += 8) {
-    nbuf[j] = '\0';
-  }
-  memcpy(buf, nbuf, 40);
+int uname(struct utsname *buf) __z88dk_fastcall {
+  syscall(SYS_GETINFO, (char *)buf, 0, 0); // Get system information
   return 0;
 }

@@ -1,132 +1,88 @@
 Manux
 =====
-Manux is an open-source, single-tasking and minimalist hobby kernel written in Z80 assembly and C. Currently, the kernel supports basic IO, monotasking and has a simple filesystem, but new features will be added in the future. The kernel is designed to be loadable to memory via BASIC "bootloader". The kernel is written in a combination of Z80 assembly and C, and can be built with the z88dk toolchain.
+Manux is a small UNIX-like operating system for the Z80 cpu.
+
+
+I'd recommend seeing the `doc/` folder for more information about the OS and its functions.
+
+Main features
+=============
+- Monotasking
+- ROM based kernel
+- Disk based userland programs
+- POSIX support(partial)
+- Custom filesystem (see `doc/filesystem.md`)
+- File descriptor support
+
+Status
+======
+The kernel is currently under development.
+Most of the features are working as intended, but there are still some bugs and missing features.
 
 System calls
 ============
-Programs can communicate with the kernel using system calls. Syscalls are mostly implemented in assembly.
+Programs can communicate with the kernel using system calls. The kernel preserves all general purpose registers, so the programmer shouldn't have to worry about them.
 
-The following system calls are implemented:
+Syscall calling convention
+- HL - Syscall argument 1
+- DE - Syscall argument 2
+- BC - Syscall argument 3
+- A  - Syscall number
 
-  0x00 - sys_exit
-    HL - exit code
+- HL - Return value if any
 
-  0x01 - sys_write
-    BC - file descriptor
-    DE - length
-    HL - buffer
-
-  0x02 - sys_read
-    BC - file descriptor
-    DE - length
-    HL - buffer
-
-  0x03 - sys_gets
-    DE - length
-    HL - buffer
-
-  0x04 - sys_puts
-    DE - length
-    HL - buffer
-
-  0x05 - sys_exec
-    HL - address
-
-  0x06 - sys_getinfo
-    HL - buffer
-
-  0x07 - sys_rand
-    returns word in HL
-
-  0x08 - sys_sleep(unimplemented)
-    HL - milliseconds
-
-  0x09 - sys_fork
-
-  0x0A - sys_getpid
-    returns current PID in HL
-
-  0x0B - sys_getpcount
-    returns process count in HL
-
-  0x0C - sys_open
-    DE - filename
-    returns file descriptor in HL
-
-  0x0D - sys_close
-    HL - file descriptor
-
-  0x0E - sys_create
-    DE - filename
-
-  0x0F - sys_execs
-    DE - filename
-    HL - arg pointer
-
-See `kernel/system_call.asm` for more information
+See `doc/syscalls.md` for more information
 
 POSIX support
 =============
-Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs. Currently the supported features are input/output and fork. 
+Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs.
+See `include/sys/unistd.h` for currently supported functions.
 
 Minimum system requirements
 ===========================
-- A Z80 CPU
-- 16K RAM(32K Recomended)
-- 8K ROM (not required if booting from BASIC)
-- a serial interface
+Manux supports bemu80 as the offical target machine. It's going to be ported to other machines in the future when the kernel becomes stable.
 
-TODO
+- A Z80 CPU
+- 56K RAM
+- 8K ROM
+- a serial interface
+- floppy disk or other disk interface
+
+These requirements may change in the future. Lower ram requirement is planned.
+
+To do
 ====
-- [x] Better kernel loader for BASIC
+- [] Add more drivers
 - [] Rework memory management
-- [] Minimal Z80 assembler(supports only the main instructions)
 - [] More POSIX features
 - [] More documentation
 - [x] A filesystem
-
-Tips for writing efficient code
-===============================
-- Use 8-bit and 16-bit variables if possible
-- Use preincrement/decrement when possible
-- Write simplest code possible
-- Use only index registers when required
-- Use static variables when possible
-- Optimize the source code
-- Use `__z88dk_fastcall` when a function requires a single argument
-
-See z88dk documentation for more information
-
-How to write PIC(Position Independent Code)(TODO)
-===========================================
-- Use index register for accessing memory, for example: `ld a, (ix+1)`. The kernel doesn't use any index registers, so you can use them freely.
-- Calculate addresses at runtime
-- Use stack to store variables
+- [] Use only SDCC compiler, not the whole z88dk toolchain
+- [] Port Manux to other machines
+- [] Better configuration
+- [] Clean legacy code
 
 Pre-requisites
 ==============
-- z88dk (preferably nightly builds)
+- z88dk 2.4(or newer)
 - make
 - kconfig-frontends-nox
-- linux
+- linux or other unix-like platform
 - git
-- a serial interface
 
 Building
 ========
 Configure Manux using `kconfig-mconf Kconfig`.
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel.
-You can also use the `kernel_load.asm` to load a small bootloader to BASIC, which can be used to load Manux from a binary file via serial interface. The serial uploading is tested on BASIC 4.7, but it should work with other versions of BASIC with/without minor modifications.
+
 Here's the steps to build Manux:
 1. `git clone https://github.com/HelleBenjamin/Manux.git`
 2. `cd Manux`
 3. `kconfig-mconf Kconfig` (optional)
-4. `make`
-5. `./upload.sh`
+4. `make`, this build only the kernel
+5. `make user-utils`, this builds the userland programs and the disk image
 
-Uploading the kernel to a real machine via serial interface
-===========================================================
-To upload the kernel to a real machine, you can use the `upload.sh` script. Before uploading, make sure you have the serial interface connected to your machine and reset the machine. When the machine asks for cold/warm boot, stop there. Disconnect all terminal sessions(eg. PuTTY) from the machine to ensure a successful upload. After the upload is complete, you can reconnect the terminal sessions and start using Manux.
+You can always run `make clean` to clean the build directory
 
 Contributing
 ============
@@ -134,4 +90,6 @@ Pull requests are welcome! Feel free to add new features or fix bugs.
 
 License
 =======
+Copyright (C) 2025-2026 Benjamin Helle
+
 Manux is licensed under the GNU GPL v2. See `LICENSE` for details.

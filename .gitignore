@@ -6,3 +6,6 @@ sal
 kernel_load.o
 kernel_load.bin
 /experimental
+mfs-util
+MANUX.asm
+disk.img
