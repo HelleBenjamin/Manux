@@ -103,7 +103,7 @@ disk: # 1.44mb image, floppy as reference
 	dd if=/dev/zero of=disk.img bs=512 count=2880
 
 # userland utilities eg. shell
-CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy --max-allocs-per-node200000 -Wall -Iinclude -L$(BUILDDIR) -llibposix -pragma-define:CRT_ENABLE_EIDI=0 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-define:CRT_MODEL=0x1 -pragma-define:CLIB_EXIT_STACK_SIZE=0 -pragma-define:CLIB_STDIO_HEAP_SIZE=0 -pragma-define:CLIB_MALLOC_HEAP_SIZE=0 -pragma-define:CRT_ORG_BSS=-1 -pragma-define:CRT_ENABLE_CLOSE=0 -pragma-define:CRT_ORG_DATA=-1 -pragma-define:REGISTER_SP=-1 -nostdlib -m -pragma-define:ENABLE_STDIO=0 -create-app
+CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy --max-allocs-per-node200000 -Wall -Iinclude -L$(BUILDDIR) -llibposix -startup=-1 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-define:CRT_MODEL=0x1 -pragma-define:CRT_ORG_BSS=-1 -pragma-define:CRT_ENABLE_CLOSE=0 -pragma-define:CRT_ORG_DATA=-1 -nostdlib -m -pragma-define:ENABLE_STDIO=0 -create-app
 user-utils: disk mfs-util posix_lib
 	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3000 sys/shell.c -o $(BUILDDIR)/SHELL.bin
 	mv $(BUILDDIR)/SHELL.rom $(BUILDDIR)/SHELL.BIN

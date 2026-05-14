@@ -8,7 +8,6 @@
 #include <string.h>
 #include <kernel/kstdio.h>
 #include <stdint.h>
-#include <sys/types.h>
 
 /*
 ; Here's a (very) basic description of the file system:
