@@ -28,7 +28,7 @@ fd_entry *fd_get(int fd) {
 }
 
 int fd_alloc(void) {
-  for (unsigned char i = 0; i < FD_MAX; ++i) {
+  for (unsigned char i = 3; i < FD_MAX; ++i) { /* skip std fds*/
     if (fd_table[i].type == FD_TYPE_NONE) {
       return i; // Found an empty entry
     }

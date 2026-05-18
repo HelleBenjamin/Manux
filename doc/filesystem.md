@@ -29,7 +29,7 @@ The root sector occupies the first sector of the disk. It contains the following
 - Filesystem checksum, offset 0x00, size 2 bytes
 - Format flag, offset 0x02, size 1 byte
 - Number of files, offset 0x03, size 1 byte
-- File entries, offset 0x04, size MAX_FILES * 19 bytes, eg. 12 * 19 = 228 bytes
+- File entries, offset 0x04, size MAX_FILES * 20 bytes, eg. 12 * 20 = 240 bytes
 
 File Entry structure
 --------------------
@@ -38,7 +38,8 @@ Each file entry is represented by the following structure:
 
 ```C
 typedef struct {
-  char      flags;      /* bit 0, file entry used*/
+  uint8_t   used;       /* used flag*/
+  uint8_t   flags;      /* file flags, read/write*/
   uint8_t   id;         /* file id*/
   char      name[12];   /* file name*/
   uint16_t  size;       /* file size in bytes */
@@ -47,7 +48,7 @@ typedef struct {
 } file;
 ```
 
-Each file entry is 19 bytes long.
+Each file entry is 20 bytes long.
 
 Block structure
 ---------------

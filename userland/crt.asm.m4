@@ -24,8 +24,9 @@ IF DEFINED_CRT_ORG_BSS
     defc    __crt_org_bss = CRT_ORG_BSS
 ENDIF
 
+; if org isn't defined, default to 0x4100
 IFNDEF      CRT_ORG_CODE
-    defc    CRT_ORG_CODE = 0x4020
+    defc    CRT_ORG_CODE = 0x4100
 ENDIF
 
     ; Default, don't change the stack pointer
@@ -47,6 +48,28 @@ ENDIF
 start:
     ; The kernel setups all the necessary things
     ; Setup BSS memory and perform other initialisation
+
+    ; cmdline enable, argc and argv
+    ; need to some magic to get it working
+    IF CRT_ENABLE_COMMANDLINE=2
+        ; hl = argv pointer
+        ; to get the pointer table, using a formula: ARGV_SIZE - (argc+1)*2
+        ; ARGV_SIZE = 242 (bytes)
+        push bc
+        ld a, c
+        inc a ; argc+1
+        add a, a ; *2
+        ld c, a ; temp
+        ld a, 242
+        sub a, c ; ARGV_SIZE-(argc+1)*2
+        add a, 0x0C ; offset of argv in PIH
+        ld l, a
+        ld h, 0x40
+        pop bc 
+        push hl ; argv
+        push bc ; argc
+    ENDIF
+
     call    crt0_init
 
     ; Setup heap if required
@@ -60,11 +83,13 @@ __Exit:
     call    crt0_exit
 
     ; Exit syscall
-    ld a, 0
+    ld a, 0 ; sys_exit
     rst 0x20
 
 l_dcal:
     jp      (hl)
+
+;INCLUDE "crt/classic/crt_runtime_selection.inc"
 
     ; If we were given a model then use it
 IF DEFINED_CRT_MODEL

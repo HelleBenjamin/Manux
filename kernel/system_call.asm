@@ -96,6 +96,10 @@ SECTION code_home
 ; 0x0D - SYS_FILESIZE
 ;   HL - filename
 ;   Description: Get file size, returns size in HL
+;
+; 0x0E - SYS_REMOVE
+;   HL - filename
+;   Description: Remove a file
 
   PUBLIC _z80_rst_20h
 _z80_rst_20h: ; Set syscall dispatch to rst 0x20
@@ -166,9 +170,10 @@ SYSCALL_TABLE:
   dw SYS_OPEN     ; 8
   dw SYS_CLOSE    ; 9
   dw SYS_SEEK     ; 10
-  dw SYS_EXEC     ; 11
+  dw SYS_EXECV    ; 11
   dw SYS_LIST     ; 12
   dw SYS_FILESIZE ; 13
+  dw SYS_REMOVE   ; 14
 
 SYSCALL_END:
   ; Restore all registers
@@ -188,6 +193,20 @@ SYSCALL_END:
 
   RET
 
+SYSCALL_END_NO_RET: ; No return value
+  ; Restore all registers
+  POP IY
+  POP IX
+  POP HL
+  POP DE
+  POP BC
+  POP AF
+
+  ; Switch to userspace
+  LD (KERNEL_SP), SP
+  LD SP, (SAVED_SP)
+
+  RET
 
 ECHO_CHAR:
   PUSH HL
@@ -209,7 +228,7 @@ SYS_EXIT:
   LD (SAVED_SP), HL
   CALL GET_HL_SYSCALL
   CALL SAVE_RET
-  JP SYSCALL_END
+  JP SYSCALL_END_NO_RET
 
 SYS_WRITE:
   ; ARGS:
@@ -282,7 +301,7 @@ SYS_GETS: ; Buffer overflow safe get string
     INC DE
     JR SYS_GETS_LOOP
   SYS_GETS_END: ; End loop
-    JP SYSCALL_END
+    JP SYSCALL_END_NO_RET
 
 
 SYS_PUTS:
@@ -301,7 +320,7 @@ SYS_PUTS:
     JR Z, SYS_PUTS_END ; Exit when DE is zero
     JR SYS_PUTS_LOOP
   SYS_PUTS_END: ; End loop
-    JP SYSCALL_END
+    JP SYSCALL_END_NO_RET
 
 SYS_PUTH:
   ; ARGS:
@@ -310,7 +329,7 @@ SYS_PUTH:
   EXTERN _kputh
   CALL GET_HL_SYSCALL
   CALL _kputh
-  JP SYSCALL_END
+  JP SYSCALL_END_NO_RET
 
 SYS_GETINFO:
   ; ARGS:
@@ -321,7 +340,7 @@ SYS_GETINFO:
   LD HL, SYSINFO
   LD BC, 45 ; correct size?
   LDIR
-  JP SYSCALL_END
+  JP SYSCALL_END_NO_RET
 
 SYS_RAND:
   ; ARGS:
@@ -375,19 +394,19 @@ SYS_SEEK:
   CALL SAVE_RET ; HL = error code
   JP SYSCALL_END
 
-SYS_EXEC:
+SYS_EXECV:
   ; ARGS:
   ;   HL = filename
   ;   DE = argument pointer
   ; RETURNS: error code in HL
   ; Saves the return address(shell)
-  EXTERN _exec
+  EXTERN _execv
   LD HL, (SAVED_SP) ; shell stack pointer
   LD (SHELL_SP), HL
   CALL GET_HL_SYSCALL
   PUSH DE
   PUSH HL
-  CALL _exec
+  CALL _execv
   CALL SAVE_RET
   POP DE
   POP DE
@@ -396,15 +415,25 @@ SYS_EXEC:
   LD DE, 0xFFFF ; check if error(-1)
   SBC HL, DE
   JP Z, SYSCALL_END
-  ; replace the return address with 0x4020, and set SP to USER_SP
+  ; replace the return address with 0x4100, and set SP to USER_SP
   LD (TMP_REG1), SP
   LD HL, USER_STACK
   LD SP, HL
-  LD HL, 0x4020
+  LD HL, 0x4100 ; push the return address
   PUSH HL
   LD (SAVED_SP), SP
   LD SP, (TMP_REG1)
-  JP SYSCALL_END
+  ; clean stack, no need to reserve registers for the new program
+  POP HL
+  POP HL
+  POP HL
+  POP HL
+  POP HL
+  POP HL
+  ; set HL and BC to argv and argc
+  LD BC, (0x400A) ; argc, points to PIH_ARGC
+  LD HL, 0x400C ; argv, points to PIH_ARGV
+  JP SYSCALL_END_SKIP
 
 SYS_LIST:
   ; ARGS:
@@ -423,5 +452,15 @@ SYS_FILESIZE:
   EXTERN _mfs_filesize
   CALL GET_HL_SYSCALL
   CALL _mfs_filesize
+  CALL SAVE_RET
+  JP SYSCALL_END
+
+SYS_REMOVE:
+  ; ARGS:
+  ;   HL = filename
+  ; RETURNS: code in HL
+  EXTERN _mfs_delete
+  CALL GET_HL_SYSCALL
+  CALL _mfs_delete
   CALL SAVE_RET
   JP SYSCALL_END

@@ -5,6 +5,6 @@
 #include <sys/syscall.h>
 #include <sys/unistd.h>
 
-int execl(const char *path, const char *arg) {
-  return syscall(SYS_EXEC, (int)path, (int)arg, 0);
+int execv(const char *path, const char *argv[]) {
+  return syscall(SYS_EXECV, (int)path, (int)argv, 0);
 }

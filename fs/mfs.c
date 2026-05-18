@@ -37,20 +37,17 @@
 ; n bytes data
 */
 
-static uint8_t *checksum = (uint8_t *)(FS_ROOT_MADDR+0);
-static uint8_t *formatted = (uint8_t *)(FS_ROOT_MADDR+2);
-static uint8_t *filecount = (uint8_t *)(FS_ROOT_MADDR+3);
-static file *files = (file *)(FS_ROOT_MADDR+4);
+static MFS *fs = (MFS *)FS_ROOT_MADDR;
+
 static uint8_t *fs_rootfs = (uint8_t *)FS_ROOT_MADDR;
 static uint8_t *tempbuf = (uint8_t *)FS_BUF; /* 512 bytes max, this should be used instead of using local buffers*/
 
 int mfs_init(void) {
-  /* Load filesystem to memory, etc..*/
-  uint16_t* root_fs = (uint16_t *)FS_ROOT_MADDR;
-  if(disk_read((char *)root_fs, FS_ROOT_SECTOR, 1) == 0) {
-    if(*((uint16_t *)checksum) != CHECKSUM) {
+  /* Load filesystem root block to memory, etc..*/
+  if(disk_read((char *)fs, FS_ROOT_SECTOR, 1) == 0) {
+    if(fs->checksum != CHECKSUM) {
       kputs(" Root FS checksum incorrect. Some files may be corrupted\n");
-    } if (*formatted == 0) {
+    } if (fs->formatted == 0) {
       kputs(" Root FS not formatted yet. Format? (y/n): ");
       char input = kgetchar();
       if (input != 'y') { return -1; }
@@ -62,15 +59,12 @@ int mfs_init(void) {
 }
 
 int mfs_format(void) {
-  memset(tempbuf, 0, 512); /* Setup root */
-  *(uint16_t *)(tempbuf + 0) = CHECKSUM; /* bytes 0-1: checksum */
-  *(uint8_t  *)(tempbuf + 2) = 1; /* byte 2: format flag */
-  *(uint8_t  *)(tempbuf + 3) = 0; /* byte 3: filecount */
+  memset(fs, 0, 512); /* Setup root */
+  fs->checksum = CHECKSUM;
+  fs->formatted = 1;
+  fs->filecount = 0;
 
-  *(uint16_t *)checksum = CHECKSUM;
-  *formatted = 1;
-
-  disk_write((char *)tempbuf, FS_ROOT_SECTOR, 1);
+  disk_write((char *)fs, FS_ROOT_SECTOR, 1);
 
   memset(tempbuf, 0, 512);
   for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) {
@@ -104,7 +98,7 @@ void print_file_info(file *f) __z88dk_fastcall {
 
 void write_changes(void) {
   /* Save root to disk*/
-  disk_write((char *)fs_rootfs, FS_ROOT_SECTOR, 1);
+  disk_write((char *)fs, FS_ROOT_SECTOR, 1);
 }
 
 /* Returns the sector of a free block*/
@@ -115,8 +109,8 @@ uint16_t find_free_block(void) {
     disk_read(tempbuf2, i, 1);
     if (tempbuf2[0] == 0) {
       int is_allocated = 0;
-      for (uint16_t j = 0; j < *filecount; ++j) {
-        uint16_t next_block = files[j].block;
+      for (uint16_t j = 0; j < fs->filecount; ++j) {
+        uint16_t next_block = fs->files[j].block;
         while (next_block != 0 && next_block < FS_MAX_SECTORS) {
           if (next_block == i) {
             is_allocated = 1;
@@ -136,43 +130,43 @@ uint16_t find_free_block(void) {
 }
 
 file* find_file(char *fname) __z88dk_fastcall {
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
-      return &files[i]; /* return pointer to the file*/
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
+    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
+      return &fs->files[i]; /* return pointer to the file*/
     }
   }
   return NULL;
 }
 
 uint16_t get_file_block(char *fname) __z88dk_fastcall {
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
-      return files[i].block;
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
+    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
+      return fs->files[i].block;
     }
   }
   return 0;
 }
 
 uint8_t get_file_index(char *fname) __z88dk_fastcall {
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
+    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
       return i;
     }
   }
   return 0xFF;
 }
 
-int load_to_memory(char *fname) __z88dk_fastcall {
+int load_executable(char *fname, uint16_t addr) {
   /* load a file to fixed address 0x4020, mainly used for executables*/
   int i = get_file_index(fname);
   if (i == 0xFF) return -1;
 
-  int16_t remaining = files[i].size;
+  int16_t remaining = fs->files[i].size;
   uint16_t bytes_in_block = 0;
-  uint16_t sector = files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
+  uint16_t sector = fs->files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
 
   uint16_t offset = 0x0000; /* Space for PIH, kernel creates the PIH */
-  uint8_t* dest = (uint8_t*)0x4020;
+  uint8_t* dest = (uint8_t*)addr;
 
   while (remaining != 0 && sector != 0 && sector < FS_MAX_SECTORS) {
     bytes_in_block = (remaining > BLOCK_SIZE-4) ? (BLOCK_SIZE-4) : remaining;
@@ -188,18 +182,6 @@ int load_to_memory(char *fname) __z88dk_fastcall {
   return 0;
 }
 
-void list_files(void) {
-  kputs("\nFile list:");
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    kputchar('\n');
-    kputs(files[i].name);
-    kputchar(' ');
-    kputh(files[i].size);
-    kputchar(' ');
-    kputh(files[i].block);
-  }
-}
-
 uint16_t get_file_size(char *fname) __z88dk_fastcall {
   file* tempfile;
   tempfile = find_file(fname);
@@ -213,32 +195,33 @@ int mfs_open(char *fname, int flags) {
   if (current_file == NULL && (flags & O_CREAT)) { /* if file doesn't exist, create it */
     /* safety checks */
     volatile uint16_t block = find_free_block(); /* remove volatile?*/
-    if (block == 0 || *filecount >= MAX_FILES) {
+    if (block == 0 || fs->filecount >= MAX_FILES) {
       return -1; /* No free blocks or block allocation failed */
     }
 
     uint8_t index = 0;
     /* find free nameslot*/
     for (index = 0; index < MAX_FILES; ++index) {
-      if (files[index].flags == 0) break;
+      if (fs->files[index].used == 0) break;
     }
 
     if (index == MAX_FILES) {
       return -1; /* No free nameslots */
     }
 
-    strncpy(files[index].name, &fname[0], MAX_FNAME_LEN-1); /* copy filename*/
-    files[index].flags = 1 | (flags & ~O_CREAT);     /* mark used*/
-    files[index].size  = 0;     /* default to 0*/
-    files[index].block_size = 0;
-    files[index].block = block; /* initial start block */
+    strncpy(fs->files[index].name, &fname[0], MAX_FNAME_LEN-1); /* copy filename*/
+    fs->files[index].used = 1; /* mark used*/
+    fs->files[index].flags = (flags & ~O_CREAT); /* include user flags*/
+    fs->files[index].size  = 0;     /* default to 0*/
+    fs->files[index].block_size = 0;
+    fs->files[index].block = block; /* initial start block */
 
     memset(tempbuf, 0, 512); /* blank block*/
     tempbuf[0] = 1; /* mark used */
     disk_write(tempbuf, block, 1); /* Reserve first block, write it immediately */
 
-    ++(*filecount); /* update filecount */
-    current_file = &files[index];
+    ++fs->filecount; /* update filecount */
+    current_file = &fs->files[index];
     write_changes(); /* save changes to disk*/
   } else if (current_file == NULL) {
     return -1; /* file doesn't exist */
@@ -415,12 +398,12 @@ int mfs_seek(int fd, uint16_t pos) {
 
 int dump_fs(void) {
   kputs("Filesystem debug info:\n");
-  kputs("Checksum: "); kputh(*(uint16_t *)checksum); kputs("\n");
-  kputs("Formatted: "); kputh(*formatted); kputs("\n");
-  kputs("Filecount: "); kputh(*filecount); kputs("\n");
+  kputs("Checksum: "); kputh(fs->checksum); kputs("\n");
+  kputs("Formatted: "); kputh(fs->formatted); kputs("\n");
+  kputs("Filecount: "); kputh(fs->filecount); kputs("\n");
   kputs("Filetable: ");
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    kputs(files[i].name);
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
+    kputs(fs->files[i].name);
     kputchar(' ');
   }
   kputs("\n");
@@ -445,25 +428,30 @@ int mfs_delete(char *fname) __z88dk_fastcall {
     current_block = next_block;
   }
 
-  /* delete the file from the filetable */
-  tempfile->flags = 0; /* mark free */
+  /* delete the file from the filetable, zero it */
+  memset(tempfile, 0, sizeof(file));
+  /*tempfile->used = 0;
+  tempfile->flags = 0;
   tempfile->size = 0;
   tempfile->block = 0;
-  tempfile->block_size = 0;
+  tempfile->block_size = 0;*/
 
-  //--(*filecount);
+  --fs->filecount;
+
+  /* update the root block immediately*/
+  write_changes();
 
   return 0;
 }
 
 int mfs_list(char *buf) __z88dk_fastcall {
   /* copy the filenames to the buffer, returns count */
-  for (uint8_t i = 0; i < *filecount; ++i) {
-    memcpy(buf, files[i].name, MAX_FNAME_LEN);
+  for (uint8_t i = 0; i <fs->filecount; ++i) {
+    memcpy(buf, fs->files[i].name, MAX_FNAME_LEN);
     buf += MAX_FNAME_LEN;
   }
 
-  return *filecount;
+  return fs->filecount;
 }
 
 int mfs_filesize(char *fname) __z88dk_fastcall {

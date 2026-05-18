@@ -54,22 +54,38 @@ FILE* disk;
 #define FS_BLOCK_SECTOR (FS_ROOT_SECTOR+1) /* Start of File blocks */
 #define FS_MAX_SECTORS  2879 /* Max sectors that the FS can use */
 
-/* Open flags */
-/* bit 0 is reserved for used flag*/
-#define O_CREAT  0x02
-#define O_RDWR   0x04
-#define O_RDONLY 0x08
-#define O_WRONLY 0x10
-#define O_EXCL   0x20
+/* file flags*/
+#define FRO      0x01
+#define FWO      0x02
+#define FRW      0x03
+
+/* from sys/fcntl.h */
+/* file open */
+#define O_RDONLY    0x00
+#define O_WRONLY    0x01
+#define O_RDWR      0x02
+#define O_ACCMODE   0x03
+
+/* file create */
+#define O_CREAT     0x200
 
 typedef struct __attribute__((packed)) {
-  char      flags; /* bit 0=used, bit 1=loaded*/
+  uint8_t   used; /* used flag */
+  uint8_t   flags; /* file flags, read/write*/
   uint8_t   id; /* file id*/
   char      name[12];
   uint16_t  size; /* file size on bytes */
   uint8_t   block_size; /* number of blocks allocated */
   uint16_t  block;   /* Start block */
-} file;
+} file; /* 20 bytes*/
+
+/* Root FS structure */
+typedef struct {
+  uint16_t  checksum;
+  uint8_t   formatted;
+  uint8_t   filecount;
+  file      files[MAX_FILES];
+} MFS;
 
 
 typedef struct {
@@ -327,7 +343,7 @@ int mfs_open(char *fname, int flags) {
     uint8_t index = 0;
     /* find free nameslot*/
     for (index = 0; index < MAX_FILES; ++index) {
-      if (files[index].flags == 0) break;
+      if (files[index].used == 0) break;
     }
 
     if (index == MAX_FILES) {
@@ -335,7 +351,8 @@ int mfs_open(char *fname, int flags) {
     }
 
     strncpy(files[index].name, &fname[0], MAX_FNAME_LEN-1); /* copy filename*/
-    files[index].flags = 1 | (flags & ~O_CREAT);     /* mark used and include user flags*/
+    files[index].used = 1; /* mark used */
+    files[index].flags = (flags & ~O_CREAT); /* include user flags*/
     files[index].size  = 0;     /* default to 0*/
     files[index].block_size = 0;
     files[index].block = block; /* initial start block */

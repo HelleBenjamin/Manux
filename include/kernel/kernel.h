@@ -13,12 +13,10 @@
 #define PIH_SIZE      (PIH_BASE+0x02)
 #define PIH_ENTRY     (PIH_BASE+0x04)
 #define PIH_FLAGS     (PIH_BASE+0x06)
-#define PIH_SP        (PIH_BASE+0x08)
-#define PIH_RETURN    (PIH_BASE+0x0A)
-#define PIH_EXITCODE  (PIH_BASE+0x0C)
-#define PIH_ARGCNT    (PIH_BASE+0x0E)
-#define PIH_ARGS      (PIH_BASE+0x10)
-#define PIH_CODE      (PIH_BASE+0x20)
+#define PIH_EXITCODE  (PIH_BASE+0x08)
+#define PIH_ARGC      (PIH_BASE+0x0A)
+#define PIH_ARGV      (PIH_BASE+0x0C)
+#define PIH_CODE      (PIH_BASE+0x100)
 
 #define MANUX_MAGIC   0x4D58 /* "MX" */
 
@@ -26,20 +24,22 @@
 #ifndef REGISTER_SP
 #define REGISTER_SP   0xFFFF
 #endif
-#define KERNEL_STACK  REGISTER_SP /* 1024 bytes*/
-#define SHELL_SP      REGISTER_SP-0x400 /* 1024 bytes*/
+#define KERNEL_STACK  REGISTER_SP /* 2048 bytes*/
+#define SHELL_SP      REGISTER_SP-0x800 /* 2048 bytes*/
+#define SHELL_CODE_AREA 0x3000
 #define USER_SP       0xEFFF /* Top of user area*/
+#define USER_CODE_AREA 0x4100
+
+#define ARGV_SIZE 242
 
 typedef struct {
   uint16_t magic;
   uint16_t size;
   uint16_t entry;
   uint16_t flags;
-  uint16_t sp;
-  uint16_t ret;
   uint16_t exitcode;
   uint16_t argc;
-  char     args[16];
+  char     argv[ARGV_SIZE];
 } PIH_t;
 
 
@@ -48,7 +48,7 @@ extern void kernel_panic(void);
 int sysc_write(int fd, int count, char *buf);
 int sysc_read(int fd, int count, char *buf);
 int ksyscall(unsigned char syscall_num, int arg1, int arg2, int arg3);
-int exec(char *fname, char *args);
+int execv(char *fname, char *argv[]);
 int exec_init(char *fname) __z88dk_fastcall;
 int create_PIH(void);
 

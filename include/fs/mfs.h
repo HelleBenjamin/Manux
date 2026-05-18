@@ -4,6 +4,7 @@
 #define MFS_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 
 #define BLOCK_SIZE    512 /* Single sector */
@@ -19,30 +20,45 @@
 #define FS_BLOCK_SECTOR (FS_ROOT_SECTOR+1) /* Start of File blocks */
 #define FS_MAX_SECTORS  2879 /* Max sectors that the FS can use - root sector */
 
-/* Open flags */
-/* bit 0 is reserved for used flag*/
-#define O_CREAT  0x02
-#define O_RDWR   0x04
-#define O_RDONLY 0x08
-#define O_WRONLY 0x10
-#define O_EXCL   0x20
+/* file flags*/
+#define FRO      0x01
+#define FWO      0x02
+#define FRW      0x03
+
+/* from sys/fcntl.h */
+/* file open */
+#define O_RDONLY    0x00
+#define O_WRONLY    0x01
+#define O_RDWR      0x02
+#define O_ACCMODE   0x03
+
+/* file create */
+#define O_CREAT     0x200
 
 typedef struct {
-  char      flags; /* bit 0=used, etc..*/
+  uint8_t   used; /* used flag */
+  uint8_t   flags; /* file flags, read/write*/
   uint8_t   id; /* file id*/
   char      name[12];
   uint16_t  size; /* file size on bytes */
   uint8_t   block_size; /* number of blocks allocated */
   uint16_t  block;   /* Start block */
-} file; /* 19 bytes*/
+} file; /* 20 bytes*/
+
+/* Root FS structure */
+typedef struct {
+  uint16_t  checksum;
+  uint8_t   formatted;
+  uint8_t   filecount;
+  file      files[MAX_FILES];
+} MFS;
 
 /* misc functions */
 uint16_t find_free_block(void);
 file* find_file(char *fname) __z88dk_fastcall;
-void list_files(void);
 uint16_t get_file_size(char *fname) __z88dk_fastcall;
 uint16_t get_file_block(char *fname) __z88dk_fastcall;
-int load_to_memory(char *fname) __z88dk_fastcall; /* Load file to memory(and makes it executable),*/
+int load_executable(char *fname, uint16_t addr); /* Load file to memory(and makes it executable),*/
 uint8_t get_file_index(char *fname) __z88dk_fastcall;
 void write_changes(void);
 

@@ -141,14 +141,14 @@ sys_seek - 0x0a
 
   Seek in a file.
 
-sys_exec - 0x0b
+sys_execv - 0x0b
 ---------------
   Arguments:
   - HL - filename
   - DE - argument pointer
 
   Returns:
-  - none
+  - HL if error
 
   Execute a file with arguments. If the file is not found, it will return an error.
 
@@ -171,3 +171,13 @@ sys_filesize - 0x0d
   - HL - file size
 
   Get the size of a file.
+
+sys_remove - 0x0e
+------------------
+  Arguments:
+  - HL - filename
+
+  Returns:
+  - HL - code
+
+  Delete a file.

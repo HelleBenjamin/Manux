@@ -1,6 +1,6 @@
 Manux
 =====
-Manux is a small UNIX-like operating system for the Z80 cpu.
+Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasksing, ROM based kernel, and disk based userland programs. Currently there aren't much of programs, but it's going to be expanded in the future.
 
 
 I'd recommend seeing the `doc/` folder for more information about the OS and its functions.
@@ -62,11 +62,18 @@ To do
 - [] Better configuration
 - [] Clean legacy code
 
+Programs
+========
+Manux can run POSIX-like with limited functionality. Some programs may not work as intended. 
+Currently stdio is not supported, so use read/write from unistd instead.
+
+Userland programs are located in `userland/` directory. See its README for more information.
+
 Pre-requisites
 ==============
 - z88dk 2.4(or newer)
 - make
-- kconfig-frontends-nox
+- kconfig-frontends-nox(for configuration)
 - linux or other unix-like platform
 - git
 
@@ -79,14 +86,21 @@ Here's the steps to build Manux:
 1. `git clone https://github.com/HelleBenjamin/Manux.git`
 2. `cd Manux`
 3. `kconfig-mconf Kconfig` (optional)
-4. `make`, this build only the kernel
-5. `make user-utils`, this builds the userland programs and the disk image
+4. `make kernel`, this build only the kernel
+5. `make userland`, this builds the userland programs and the disk image
+6. `make`, this builds the kernel and the userland
+7. `make emulate`, run the OS in bemu80
+
+Note that compilation can take a while due to SDCC's optimizer. 
+Reduce `--max-allocs-per-node100000` to 10000 if you want to build faster at the cost of code size and speed.
 
 You can always run `make clean` to clean the build directory
 
 Contributing
 ============
 Pull requests are welcome! Feel free to add new features or fix bugs.
+Note that clearly vibe coded slop code isn't accepted.
+You can use AI if you understand it well enough.
 
 License
 =======

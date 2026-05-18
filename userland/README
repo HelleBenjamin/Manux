@@ -1,0 +1,1 @@
+This directory contains POSIX-compatible userland programs which can run on both Manux and on Linux, with the exception of the shell.

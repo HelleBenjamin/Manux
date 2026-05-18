@@ -15,9 +15,10 @@
 #define SYS_OPEN      8
 #define SYS_CLOSE     9
 #define SYS_SEEK      10
-#define SYS_EXEC      11
+#define SYS_EXECV     11
 #define SYS_LIST      12
 #define SYS_FILESIZE  13
+#define SYS_REMOVE    14
 
 int syscall(unsigned char syscall_num, int arg1, int arg2, int arg3);
 

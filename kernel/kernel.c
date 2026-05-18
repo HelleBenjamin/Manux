@@ -29,26 +29,58 @@ int kernel_main(void) {
 
 static PIH_t* pih = (PIH_t*)0x4000; /* program info header */
 
-int exec(char *fname, char *args) {
-  if (load_to_memory(fname) == -1) return -1; /* file not found */
+int execv(char *fname, char *argv[]) {
+  if (load_executable(fname, USER_CODE_AREA) == -1) return -1; /* file not found, return immediately */
 
-  /* setup the PIH*/
   file *file = find_file(fname);
-  pih->size = file->size;
-  //fd_entry *entry = &fd_table[fd];
-  //pih->entry = entry->file->entry;
-  //pih->size = entry->file->size;
-  if (strlen(args) < 16) memcpy(pih->args, args, strlen(args)); /* copy args*/
-  else if (strlen(args) > 16) memcpy(pih->args, args, 16); /* copy args within 16 bytes*/
-  else if (args == NULL) memset(pih->args, 0, 16); /* clear args*/
+  pih->size = file->size; /* copy file size, useless for now*/
+
+  if (argv != NULL) {
+    int argc = 0; /* argument count*/
+    int strpos = 0; /*string position*/
+    char *ptrv = pih->argv; /* argv table, points to 0x400C(or PIH_ARGV, defined in kernel.h) initially*/
+    uint8_t offsets[16]; /* argument offsets, pointers*/
+    memset(ptrv, 0, ARGV_SIZE); /* clear */
+
+    /* a fancy pointer formula: ARGV_SIZE - (argc+1)*2 */
+
+    /* step 1+2, copy each string to argv table and save the offsets*/
+    while(argv[argc] != NULL && argc < 16) { /* max 16 arguments */
+      int len = strlen(argv[argc])+1; /* +1 for null byte*/
+      if (strpos + len > ARGV_SIZE - (16 * 2)) break; /* make sure that it doesn't overflow*/
+      offsets[argc] = (uint8_t)strpos; /* offsets under 8-bit boundary*/
+      memcpy(ptrv+strpos, argv[argc], len);
+      strpos += len; /* update counts */
+      argc++;
+    }
+
+    /* step 3, set pointers */
+    int ptrpos = ARGV_SIZE - (argc+1)*2;
+    for (uint8_t i = 0; i < argc; i++) {
+      uint16_t addr = PIH_ARGV + offsets[i];
+      ptrv[ptrpos+(i*2)] = addr & 0xFF; /* lower half */
+      ptrv[ptrpos+(i*2)+1] = (addr >> 8) & 0xFF; /* higher half*/
+    }
+
+    /* null terminate*/
+    ptrv[ptrpos+(argc*2)] = 0;
+    ptrv[ptrpos+(argc*2)+1] = 0;
+
+    pih->argc = argc; /* update to PIH*/
+  } else { /* no arguments */
+    pih->argc = 0;
+    memset(pih->argv, 0, ARGV_SIZE);
+  }
+
   /* jumps in the syscall handler*/
 
   return 0;
 }
 
 int exec_init(char *fname) __z88dk_fastcall {
+  /* maybe make shell accept arguments from the kernel?*/
   /* runs the shell*/
-  if (load_to_memory(fname) == -1) { /* SHELL.BIN not found */
+  if (load_executable(fname, SHELL_CODE_AREA) == -1) { /* SHELL.BIN not found */
     return -1;
   }
 
@@ -57,9 +89,6 @@ int exec_init(char *fname) __z88dk_fastcall {
   //int size = entry->file->size;
   file *shellfile = find_file(fname);
   int size = shellfile->size;
-
-  /* mfs_open reads by default to 0x4020, so copy the file to 0x3000 where the shell area lives */
-  memcpy((uint8_t*)0x3000, (uint8_t*)0x4020, size);
 
   //mfs_close(fd);
 
