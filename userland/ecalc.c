@@ -1,6 +1,6 @@
 /*
  * ecalc - simple integer calculator for ELKS
- * ported for Manux
+ * ported to Manux/Unix
  * Copyright (c) 2025-2026 Benjamin Helle
  * SPDX-License-Identifier: GPL-2.0-or-later
  * 
@@ -18,7 +18,7 @@
 #include <string.h>
 #include <ctype.h>
 
-/* version 1.2 */
+/* version 1.3 */
 /* notice: int is always signed 16 bit*/
 
 /* define tokens*/
@@ -242,17 +242,20 @@ void putd(int n) {
 
 int main(int argc, char **argv) 
 {
-  putstr("ecalc 1.2\nCtrl+C to exit\n");
+  putstr("ecalc 1.3\nType 'q' to exit");
   char line[0xFF];
   while (1) { /* main loop */
     putstr("\n> ");
     read(0, line, sizeof(line));
+
+    /* exit*/
+    if (line[0] == 'q') break;
     
     src = line;
     next_token();
 
     result = parse_expr(); /* get result */
-    putstr("= "); /* and print it */
+    putstr("\n= "); /* and print it */
     putd(result);
   }
 
