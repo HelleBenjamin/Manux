@@ -1,4 +1,4 @@
-all: build MANUX userland
+all: build MANUX userland bemu80
 
 # Assembler and compiler. We'll use zcc and z80asm for now
 AS := z88dk-z80asm
@@ -17,7 +17,11 @@ KSRC := kernel/kmain.asm kernel/system_call.asm driver/disk.asm
 CSRC := kernel/kernel.c kernel/kstdio.c driver/tty.c fs/mfs.c fs/fd.c
 
 # Manux POSIX sources
-POSIX_SRC := sys/syscall.c sys/utsname.c sys/unistd/read.c sys/unistd/write.c sys/unistd/close.c sys/unistd/_exit.c sys/unistd/execv.c sys/unistd/open.c
+# compile all within the sys/ directory
+POSIX_SRC := $(wildcard sys/*.c) $(wildcard sys/unistd/*.c)
+
+# bemu80 emulator executable
+BEMU80 := $(ROOTDIR)/bemu80/bemu80
 
 # Objects
 KOBJ = $(KSRC:%.asm=build/%.o)
@@ -94,15 +98,19 @@ CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy -compiler=sdcc --max-allocs-per-node100
 userland: mfs-util posix_lib disk
 	$(MAKE) -C userland AS=$(AS) CC=$(CC) AS_FLAGS="$(AS_FLAGS)" CCU_FLAGS="$(CCU_FLAGS)" ROOTDIR=$(ROOTDIR) BUILDDIR=$(BUILDDIR)
 
+bemu80:
+	$(MAKE) -C bemu80 ROOTDIR=$(ROOTDIR) BUILDDIR=$(BUILDDIR)
 
 # Clean the build directory
 clean:
 	rm -rf build
+	rm -f mfs-util
+	rm -f disk.img
 
 disasm:
 	z88dk-dis -mz80 -o 0x0000 -x $(BUILDDIR)/MANUX.map $(BUILDDIR)/MANUX.rom > MANUX.asm
 
 emulate:
-	bemu80 --rom $(BUILDDIR)/MANUX.rom --fd disk.img
+	$(BEMU80) --rom $(BUILDDIR)/MANUX.rom --fd disk.img
 
-.PHONY: userland
+.PHONY: userland bemu80

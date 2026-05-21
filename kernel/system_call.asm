@@ -82,6 +82,7 @@ SECTION code_home
 ; 0x0A - SYS_SEEK
 ;   HL - file descriptor
 ;   DE - offset
+;   BC - whence
 ;   Description: Seek in a file
 ;
 ; 0x0B - SYS_EXEC
@@ -383,12 +384,15 @@ SYS_SEEK:
   ; ARGS:
   ;   HL = file descriptor
   ;   DE = offset
+  ;   BC = whence
   ; RETURNS: error code in HL
   EXTERN _mfs_seek
   CALL GET_HL_SYSCALL
+  PUSH BC
   PUSH DE
   PUSH HL
   CALL _mfs_seek ; Call C function
+  POP DE
   POP DE
   POP DE
   CALL SAVE_RET ; HL = error code

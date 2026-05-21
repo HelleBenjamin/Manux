@@ -36,4 +36,6 @@ extern int close(int fd);
 
 extern int execv(const char *path, const char *argv[]);
 
+extern int lseek(int fd, int offset, int whence);
+
 #endif

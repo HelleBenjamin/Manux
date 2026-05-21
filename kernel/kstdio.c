@@ -25,11 +25,13 @@ int kgetchar(void) {
 }
   
 int kputs(char *s) __z88dk_fastcall {
+  uint16_t i = 0;
   while (*s) {
     kputchar(*s);
     ++s;
+    ++i;
   }
-  return 0;
+  return i; /* written chars */
 }
 
 int kputslen(char *s, int len) {
@@ -40,7 +42,7 @@ int kputslen(char *s, int len) {
 }
 
 int kgetslen(char *s, int len) {
-  unsigned int i;
+  int i;
   for (i = 0; i < len; ++i) {
     s[i] = kgetchar();
     if (s[i] == '\r' || s[i] == '\n') { /* newline */
@@ -50,13 +52,12 @@ int kgetslen(char *s, int len) {
       if (i > 0) {
         s[i] = 0;
         i-=2;
-        kputchar('\b');
-      } else --i;
-
+        kputs("\b \b");
+      }
     }
   }
   s[i] = 0; /* null terminator*/
-  return 0;
+  return i; /* read chars*/
 }
 
 // Print unsigned number

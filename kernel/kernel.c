@@ -128,12 +128,12 @@ int sysc_write(int fd, int count, char *buf) {
   if (fd == -1) return -1; /* null */
 
   if (entry->type == FD_TYPE_STDOUT || entry->type == FD_TYPE_STDERR) { /* STDOUT or STDERR */
-    kputslen(buf, count);
+    return kputslen(buf, count);
   } 
   else { /* else write to file */
-    mfs_write(fd, buf, count);
+    return mfs_write(fd, buf, count);
   }
-  return count;
+  return -1;
 }
 
 int sysc_read(int fd, int count, char *buf) {
@@ -141,10 +141,10 @@ int sysc_read(int fd, int count, char *buf) {
   if (fd == -1) return -1; /* null */
 
   if (entry->type == FD_TYPE_STDIN) { /* STDIN */
-    kgetslen(buf, count);
+    return kgetslen(buf, count);
   } 
   else { /* else read from file */
-    mfs_read(fd, buf, count);
+    return mfs_read(fd, buf, count);
   }
-  return count;
+  return -1;
 }

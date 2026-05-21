@@ -1,0 +1,163 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright (c) 2025-2026 Benjamin Helle
+*/ 
+#ifndef BEMU80_H
+#define BEMU80_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+#define MEM_SIZE 0x10000 // 64k
+#define STD_PORT 0x81
+
+#define FLAG_C  0x01
+#define FLAG_N  0x02
+#define FLAG_PV 0x04
+#define FLAG_X  0x08 /* undocumented */
+#define FLAG_H  0x10
+#define FLAG_Y  0x20 /* undocumented */
+#define FLAG_Z  0x40
+#define FLAG_S  0x80
+
+#define ALU_OP_ADD  0x00
+#define ALU_OP_ADC  0x01
+#define ALU_OP_SUB  0x02
+#define ALU_OP_SBC  0x03
+#define ALU_OP_AND  0x04
+#define ALU_OP_OR   0x05
+#define ALU_OP_XOR  0x06
+#define ALU_OP_CP   0x07
+#define ALU_OP_INC  0x08
+#define ALU_OP_DEC  0x09
+#define ALU_OP_RLC  0x0A
+#define ALU_OP_RL   0x0B
+#define ALU_OP_RRC  0x0C
+#define ALU_OP_RR   0x0D
+#define ALU_OP_SLA  0x0E
+#define ALU_OP_SLL  0x0F
+#define ALU_OP_SRA  0x10
+#define ALU_OP_SRL  0x11
+#define ALU_OP_BIT  0x12
+#define ALU_OP_RES  0x13
+#define ALU_OP_SET  0x14
+
+// GP registers
+#define REG_A 0x07
+#define REG_B 0x00
+#define REG_C 0x01
+#define REG_D 0x02
+#define REG_E 0x03
+#define REG_H 0x04
+#define REG_L 0x05
+
+// GP Reg pairs(unofficial)
+#define REG_BC 0x00
+#define REG_DE 0x02
+#define REG_HL 0x04
+#define REG_AF 0x06
+#define REG_IX 0x08
+#define REG_IY 0x0A
+
+/* GP Regpairs(official)*/
+#define REGPAIR_BC 0x00
+#define REGPAIR_DE 0x01
+#define REGPAIR_HL 0x02
+#define REGPAIR_SP 0x03
+
+/* FDC */
+/* This is a very simple implementation of a floppy disk controller*/
+#define FDC_PORT_CMD     0x10
+#define FDC_PORT_LBA_LO  0x11
+#define FDC_PORT_LBA_HI  0x12
+#define FDC_PORT_DMA_LO  0x13
+#define FDC_PORT_DMA_HI  0x14
+#define FDC_PORT_STATUS  0x15
+#define FDC_PORT_COUNT   0x16
+
+#define FDC_CMD_READ     0x01
+#define FDC_CMD_WRITE    0x02
+
+#define FDC_STATUS_OK    0x00
+#define FDC_STATUS_ERR   0x01
+#define FDC_STATUS_BUSY  0x02
+
+#define FDC_SECTOR_SIZE  512
+#define FDC_SECTORS_PER_TRACK 9
+
+
+typedef struct {
+  // Registers
+  uint8_t regs[8];
+  uint8_t shadow_regs[8];
+  uint8_t flags, shadow_flags;
+  uint16_t ix, iy; // Index Y and X
+  uint16_t pc, sp; // Program counter, stack pointer
+  uint16_t wz; // Temp register
+  uint8_t i, r; // Interrupt, dram refresh
+  uint8_t im; // Interrupt mode
+  bool iff1, iff2;
+  bool halt;
+  uint64_t cycles;
+} VirtZ80;
+
+typedef struct {
+  uint8_t status, count;
+  uint16_t lba, dma;
+  FILE* disk;
+} FDC_t;
+
+/*CPU related*/
+void execute(VirtZ80 *cpu);
+void interrupt(VirtZ80 *cpu);
+
+static inline void mwrite8(uint16_t address, uint8_t value);
+static inline uint8_t mread8(uint16_t address);
+static inline void mwrite16(uint16_t address, uint16_t value);
+static inline uint16_t mread16( uint16_t address);
+
+static inline uint8_t fByte(VirtZ80 *cpu);
+static inline uint16_t fWord(VirtZ80 *cpu);
+
+void output_handler(uint8_t port, uint8_t value);
+uint8_t input_handler(uint8_t port);
+
+void print_state(VirtZ80 *cpu);
+void stack_trace(VirtZ80 *cpu, int depth);
+void print_memory(VirtZ80 *cpu);
+
+int step_instruction(VirtZ80 *cpu);
+void misc_instruction(VirtZ80 *cpu);
+void bit_instruction(VirtZ80 *cpu);
+void index_instruction(VirtZ80 *cpu, uint16_t* index_reg);
+
+/*6850 ACIA*/
+
+#define ACIA_RDRF 0x01
+#define ACIA_THRE 0x02
+#define ACIA_IRQ  0x80
+#define ACIA_RIE  0x80
+#define ACIA_CTS  0x08
+#define ACIA_OVRN 0x20
+
+#define PORT_ACIA_DATA 0x81
+#define PORT_ACIA_CMD  0x80
+
+typedef struct {
+  uint8_t ctrl, status, transmit, receive;
+} ACIA_t;
+
+void ACIA_init(ACIA_t *acia);
+void ACIA_write_cmd(ACIA_t *acia, uint8_t value);
+void ACIA_write_data(ACIA_t *acia, uint8_t value);
+uint8_t ACIA_read_data(ACIA_t *acia);
+uint8_t ACIA_read_status(ACIA_t *acia);
+
+/*DEBUG STUFF*/
+void debug_mode(VirtZ80 *cpu);
+void draw_registers(VirtZ80 *cpu);
+void draw_memory(VirtZ80 *cpu);
+void init_debug_ui();
+void close_debug_ui();
+
+#endif

@@ -151,19 +151,38 @@ int bls(char **argv) {
     newline();
     bufferptr += 12; /* 12 is the filesize*/
   }
+  return 0;
 }
 int bcat(char **argv) {
   /* display file contents*/
   char *fname = argv[1];
+  int fd = open(fname, O_RDONLY, 0);
+  if (fd == -1) {
+    putstr("Error opening file\n\r");
+    return -1;
+  }
   int filesize = syscall(SYS_FILESIZE, fname, 0, 0);
-  if (filesize < 127) {
-    char buffer[127];
-    int fd = open(fname, O_RDONLY, 0);
+  if (filesize == -1) {
+    putstr("Error getting file size\n\r");
+    return -1;
+  }
+  char buffer[255];
+  if (filesize < 255) {
     read(fd, buffer, filesize);
     write(STDOUT_FILENO, buffer, filesize);
     newline();
-    close(fd);
-  }  
+  } else { /* print file in 255 chunks*/
+    uint16_t remaining = filesize;
+
+    while (remaining > 0) {
+      uint16_t to_read = (remaining < 255) ? remaining : 255;
+      read(fd, buffer, to_read);
+      write(STDOUT_FILENO, buffer, to_read);
+      remaining -= to_read;
+    }
+  }
+  close(fd);
+  return 0;
 }
 int bclear(char **argv) {
   /* ansi clear screen, may not work on non-ansi terminals*/

@@ -5,6 +5,7 @@
 #include <sys/syscall.h>
 #include <sys/fcntl.h>
 
-int open(const char *path, int flags, int mode) {
-  return syscall(SYS_OPEN, path, flags, mode);
+int open(const char *path, int flags, ...) {
+  /* add mode arg?*/
+  return syscall(SYS_OPEN, path, flags, 0);
 }

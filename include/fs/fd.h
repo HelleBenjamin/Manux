@@ -23,7 +23,7 @@
 typedef struct {
   uint8_t type; /* file, etc..*/
   uint8_t flags; /* read write*/
-  uint16_t pos;
+  uint16_t pos; /* rw position*/
   uint16_t cur_block; /* current block */
   uint16_t prev_block; /* previous block */
   uint16_t block_offset; /* byte offset */

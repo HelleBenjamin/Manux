@@ -231,8 +231,26 @@ int mfs_open(char *fname, int flags) {
   fd_entry entry;
   entry.type = FD_TYPE_FILE;
   entry.file = current_file;
-  entry.flags = FD_FLAGS_READ | FD_FLAGS_WRITE; /* r/w*/
-  entry.pos = 0;
+  entry.flags = 0;
+
+  int acc = flags & O_ACCMODE;
+  /* flag setup*/
+  if (acc == O_RDONLY) {
+    entry.flags |= FD_FLAGS_READ;
+    entry.pos = 0; /* position is always 0, change with seek*/
+  } else if (acc == O_WRONLY) {
+    entry.flags |= FD_FLAGS_WRITE;
+    /* append and truncate is only allowed in write mode*/
+    if (flags & O_APPEND) entry.pos = current_file->size;
+    else if (flags & O_TRUNC) entry.pos = 0;
+    else entry.pos = 0;
+  } else if (acc == O_RDWR) {
+    entry.flags |= FD_FLAGS_READ | FD_FLAGS_WRITE;
+    /* append and truncate is only allowed in write mode, in read mode it may cause problems?*/
+    if (flags & O_APPEND) entry.pos = current_file->size;
+    else if (flags & O_TRUNC) entry.pos = 0;
+    else entry.pos = 0;
+  }
   entry.cur_block = current_file->block;
   entry.block_offset = 0;
   entry.prev_block = 0;
@@ -268,7 +286,7 @@ int mfs_read(int fd, char *buf, uint16_t count) {
   }
 
   if (entry->pos >= entry->file->size) {
-    return -1 /* EOF*/;
+    return 0 /* EOF*/;
   }
 
   uint16_t remaining = count; /* remaining bytes to read*/
@@ -374,14 +392,21 @@ int mfs_sync(void) {
   return 0;
 }
 
-int mfs_seek(int fd, uint16_t pos) {
+int mfs_seek(int fd, uint16_t pos, int whence) {
   fd_entry *entry = fd_get(fd);
   if (entry == NULL || entry->type != FD_TYPE_FILE) {
     return -1;
   }
 
   uint16_t block = entry->file->block;
-  uint16_t offset = pos;
+  uint16_t offset; /* read offset*/
+  if (whence == SEEK_SET) { /* absolute*/
+    offset = pos;
+  } else if (whence == SEEK_CUR) { /* from current position*/
+    offset = entry->pos + pos;
+  } else if (whence == SEEK_END) { /* from the end of the file*/
+    offset = entry->file->size + pos;
+  }
 
   while (offset >= (BLOCK_SIZE-4) && block != 0 && block < FS_MAX_SECTORS) {
     disk_read(tempbuf, block, 1);

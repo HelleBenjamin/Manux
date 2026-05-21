@@ -2,6 +2,8 @@ Manux
 =====
 Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasksing, ROM based kernel, and disk based userland programs. Currently there aren't much of programs, but it's going to be expanded in the future.
 
+Manux runs on a custom Z80 emulator called bemu80(https://github.com/HelleBenjamin/bemu80).
+The emulator is included in the repository and can be built using `make bemu80`.
 
 I'd recommend seeing the `doc/` folder for more information about the OS and its functions.
 
@@ -40,7 +42,7 @@ See `include/sys/unistd.h` for currently supported functions.
 
 Minimum system requirements
 ===========================
-Manux supports bemu80(https://github.com/HelleBenjamin/bemu80) as the offical target machine. It's going to be ported to other machines in the future when the kernel becomes stable.
+Manux supports bemu80(https://github.com/HelleBenjamin/bemu80) as the offical target machine. Manux is going to be ported to other machines in the future when the kernel becomes stable.
 
 - A Z80 CPU
 - 56K RAM
@@ -88,8 +90,9 @@ Here's the steps to build Manux:
 3. `kconfig-mconf Kconfig` (optional)
 4. `make kernel`, this build only the kernel
 5. `make userland`, this builds the userland programs and the disk image
-6. `make`, this builds the kernel and the userland
-7. `make emulate`, run the OS in bemu80
+6. `make bemu80`, this builds bemu80
+7. `make`, this builds all, kernel, userland, etc..
+8. `make emulate`, run the OS in bemu80
 
 Note that compilation can take a while due to SDCC's optimizer. 
 Reduce `--max-allocs-per-node100000` to 10000 if you want to build faster at the cost of code size and speed.

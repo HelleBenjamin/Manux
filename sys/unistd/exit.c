@@ -9,6 +9,7 @@ void _exit(int code) {
   syscall(SYS_EXIT, code, 0, 0);
 }
 
+/* for z88dk compability */
 void _exit_fastcall(int status) __preserves_regs(a,b,c,d,e,h,l) __z88dk_fastcall {
   syscall(SYS_EXIT, status, 0, 0);  
 }

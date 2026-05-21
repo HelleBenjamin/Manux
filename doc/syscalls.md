@@ -135,11 +135,13 @@ sys_seek - 0x0a
   Arguments:
   - HL - file descriptor
   - DE - offset
+  - BC - whence
 
   Returns:
   - none
 
-  Seek in a file.
+  Seek in a file. Whence argument is SEEK_SET(0), SEEK_CUR(1), SEEK_END(2).
+  SEEK_SET = absolute, SEEK_CUR = from current position, SEEK_END = from the end of the file
 
 sys_execv - 0x0b
 ---------------

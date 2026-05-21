@@ -31,9 +31,16 @@
 #define O_WRONLY    0x01
 #define O_RDWR      0x02
 #define O_ACCMODE   0x03
+#define	O_APPEND	  0x08	
 
 /* file create */
 #define O_CREAT     0x200
+#define O_TRUNC     0x400
+
+/* seek */
+#define SEEK_SET    0x01
+#define SEEK_CUR    0x02
+#define SEEK_END    0x03
 
 typedef struct {
   uint8_t   used; /* used flag */
@@ -72,7 +79,7 @@ int mfs_read(int fd, char *buf, uint16_t count);
 int mfs_write(int fd, char *buf, uint16_t count);
 int mfs_sync(void);
 int mfs_delete(char *fname) __z88dk_fastcall;
-int mfs_seek(int fd, uint16_t pos);
+int mfs_seek(int fd, uint16_t pos, int whence);
 int dump_fs(void);
 int mfs_list(char *buf) __z88dk_fastcall;
 int mfs_filesize(char *fname) __z88dk_fastcall;
