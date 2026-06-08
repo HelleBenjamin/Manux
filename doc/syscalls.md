@@ -16,12 +16,32 @@ Manux uses the following calling convention for system calls:
 
 - HL - Return value if any
 
-All general purposes registers are preserved by system calls.
+All general purposes registers are preserved by system calls, no need to worry about them.
 
-System calls
-------------
+Manux provides the following system calls:
 
-The following system calls are implemented:
+| Num | Syscall  | Arg 1 | Arg 2 | Arg 3 | Return value  |
+|-----|----------|-------|-------|-------|---------------|
+| 0   | exit     | code  |       |       |               |
+| 1   | write    | fd    | len   | buf   | bytes written |
+| 2   | read     | fd    | len   | buf   | bytes read    |
+| 3   | gets     | buf   | len   |       | bytes read    |
+| 4   | puts     | buf   | len   |       |               |
+| 5   | puth     | val   |       |       |               |
+| 6   | getinfo  | buf   |       |       |               |
+| 7   | rand     |       |       |       | random value  |
+| 8   | open     | fname | flags |       | fd            |
+| 9   | close    | fd    |       |       | code          |
+| 10  | seek     | fd    | offs  | whc   | code          |
+| 11  | execv    | fname | argv  |       | code          |
+| 12  | list     | buf   |       |       | num of files  |
+| 13  | filesize | fname |       |       | size of file  |
+| 14  | remove   | fname |       |       | code          |
+
+System calls - detailed
+-----------------------
+
+Here are more detailed descriptions about the system calls.
 
 sys_exit - 0x00
 ---------------
@@ -126,7 +146,7 @@ sys_close - 0x09
   - HL - file descriptor
 
   Returns:
-  - none
+  - HL - code
 
   Close a file descriptor.
 
@@ -138,7 +158,7 @@ sys_seek - 0x0a
   - BC - whence
 
   Returns:
-  - none
+  - HL -code
 
   Seek in a file. Whence argument is SEEK_SET(0), SEEK_CUR(1), SEEK_END(2).
   SEEK_SET = absolute, SEEK_CUR = from current position, SEEK_END = from the end of the file
@@ -152,7 +172,8 @@ sys_execv - 0x0b
   Returns:
   - HL if error
 
-  Execute a file with arguments. If the file is not found, it will return an error.
+  Execute a file with arguments. Replace current running program with the new one. Does not replace the init/shell.
+  If the file is not found, it will return an error.
 
 sys_list - 0x0c
 ---------------
@@ -183,3 +204,17 @@ sys_remove - 0x0e
   - HL - code
 
   Delete a file.
+
+
+Invoking a syscall
+==================
+
+Here is an example of how to invoke a syscall in assembly:
+```asm
+  ld hl, HELLO_MSG
+  ld de, 5
+  ld a, 4
+  rst 0x20
+```
+
+In this example HL is loaded with the address of the message, DE is loaded with the length of the message, and A is loaded with the syscall number.

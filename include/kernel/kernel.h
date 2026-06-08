@@ -7,6 +7,8 @@
 
 #define KERNEL_WORKSPACE 0x2000
 
+#define KERNEL_FLAGS (KERNEL_WORKSPACE+0x08)
+
 /* Program Info Header */
 #define PIH_BASE      0x4000
 #define PIH_MAGIC     (PIH_BASE+0x00)
@@ -31,6 +33,8 @@
 #define USER_CODE_AREA 0x4100
 
 #define ARGV_SIZE 242
+
+extern uint8_t* kernel_flags;
 
 typedef struct {
   uint16_t magic;

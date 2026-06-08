@@ -1,0 +1,574 @@
+/* SPDX-License-Identifier: GPL-2.0-only
+* Copyright (c) 2026 Benjamin Helle
+* asmz80.c
+* simple z80 assembler
+* can assemble VERY simple programs
+*/
+
+/* this is very barebones, supports small subset of z80 instructions */
+/* I wrote this in a day, so it needs proper testing and bug fixing*/
+
+#ifdef __linux
+#include <unistd.h>
+#include <fcntl.h>
+#else
+/* Manux libraries */
+#include <sys/unistd.h>
+#include <sys/fcntl.h>
+#endif
+#include <stdint.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+int outputfd; /* output file descriptor */
+uint16_t pc = 0; /* program counter, keeps track of current address */
+
+/* stdout wrappers*/
+void putchr(char c) {
+  write(STDOUT_FILENO, &c, 1);
+}
+
+void putstr(char *str) {
+  write(STDOUT_FILENO, str, strlen(str));
+}
+
+void newline(void) {
+  putchr('\n');
+}
+
+
+/* emit byte*/
+void emitb(uint8_t b) {
+  write(outputfd, &b, 1);
+  pc++;
+}
+
+/* emit word */
+void emitw(uint16_t w) {
+  /* little endian */
+  emitb(w & 0xff);
+  emitb((w >> 8) & 0xff);
+}
+
+int emit_rel(char *addr, uint16_t base_pc) {
+  int num = strtol(addr, NULL, 0);
+  int offset;
+
+  /* if fit in 8-bit signed range */
+  if (num >= -128 && num <= 127) {
+    emitb((uint8_t)(num));
+    return 0;
+  }
+
+  /* if fit in 8-bit unsigned range */
+  if (num >= 0 && num <= 0xFF) {
+    emitb((uint8_t)(int8_t)(num));
+    return 0;
+  }
+
+  /* else calculate relative offset and emit it */
+  offset = num - (int)(base_pc+2);
+  if (offset < -128 || offset > 127) {
+    return -1; /* offset out of range */
+  }
+  emitb((uint8_t)offset);
+  return 0;
+}
+
+int reg8(char *name) {
+  /* return register "index"*/
+  if (strcmp(name, "B") == 0) return 0;
+  if (strcmp(name, "C") == 0) return 1;
+  if (strcmp(name, "D") == 0) return 2;
+  if (strcmp(name, "E") == 0) return 3;
+  if (strcmp(name, "H") == 0) return 4;
+  if (strcmp(name, "L") == 0) return 5;
+  if (strcmp(name, "(HL)") == 0) return 6;
+  if (strcmp(name, "A") == 0) return 7;
+  return -1; /* invalid register */
+}
+
+int reg16(char *name) {
+  /* for add/sub, etc..*/
+  if (strcmp(name, "BC") == 0) return 0;
+  if (strcmp(name, "DE") == 0) return 1;
+  if (strcmp(name, "HL") == 0) return 2;
+  if (strcmp(name, "SP") == 0) return 3;
+  return -1;
+}
+
+int reg16af(char *name) {
+  /* return register "index", used for push/pop*/
+  if (strcmp(name, "BC") == 0) return 0;
+  if (strcmp(name, "DE") == 0) return 1;
+  if (strcmp(name, "HL") == 0) return 2;
+  if (strcmp(name, "AF") == 0) return 3; /* instead of SP*/
+  return -1;
+}
+
+int jpcond(char *name) {
+  /* jump condition*/
+  if (strcmp(name, "NZ") == 0) return 0;
+  if (strcmp(name, "Z") == 0) return 1;
+  if (strcmp(name, "NC") == 0) return 2;
+  if (strcmp(name, "C") == 0) return 3;
+  if (strcmp(name, "PO") == 0) return 4;
+  if (strcmp(name, "PE") == 0) return 5;
+  if (strcmp(name, "P") == 0)  return 6;
+  if (strcmp(name, "M") == 0)  return 7;
+  return -1; /* invalid condition */
+}
+
+int jrcond(char *name) {
+  /* jump relative condition*/
+  if (strcmp(name, "NZ") == 0) return 0;
+  if (strcmp(name, "Z") == 0) return 1;
+  if (strcmp(name, "NC") == 0) return 2;
+  if (strcmp(name, "C") == 0) return 3;
+  return -1;
+}
+
+int mem_addr(char *addr) {
+  /* parses memory address, like (0x30) to number 0x30*/
+  if (addr[0] == '(' && addr[strlen(addr) - 1] == ')') {
+    addr[strlen(addr) - 1] = '\0';
+    return strtol(addr + 1, NULL, 0);
+  }
+  return -1; /* invalid memory address */
+}
+
+/* single pass code generation, needs to be dual pass to support labels */
+int line_codegen(char *line) {
+  /* global variables, makes debugging easier */
+  char op[6];
+  char arg1[20];
+  char arg2[20];
+  int reg1, reg2; /* 8-bit registers */
+  int rr; /* 16-bit register */
+  int cond; /* condition, for jumps, etc.*/
+  int addr; /* absolute address */
+  int imm;
+
+  /* remove comments */
+  /* somehow doesn't work if line starts with a comment, fix */
+  for (int i = 0; line[i]; i++) {
+    if (line[i] == ';') {
+      line[i] = '\0';
+      break;
+    }
+  }
+
+  /* make line uppercase */
+  for (int i = 0; line[i] != '\0'; i++) {
+    line[i] = toupper(line[i]);
+  }
+
+  /* tokenize line with strtok */
+  /* operation*/
+  char *token = strtok(line, " \t");
+  if (!token) return -1;
+  strncpy(op, token, sizeof(op) - 1);
+  op[sizeof(op) - 1] = '\0';
+
+  /* argument 1*/
+  token = strtok(NULL, " \t,");
+  if (token) {
+    strncpy(arg1, token, sizeof(arg1) - 1);
+    arg1[sizeof(arg1) - 1] = '\0';
+  } else {
+    arg1[0] = '\0';
+  }
+
+  /* argument 2*/
+  token = strtok(NULL, " \t,");
+  if (token) {
+    strncpy(arg2, token, sizeof(arg2) - 1);
+    arg2[sizeof(arg2) - 1] = '\0';
+  } else {
+    arg2[0] = '\0';
+  }
+
+  /* codegen part*/
+  /* no argument operation first(easiest to implement)*/
+  if (strcmp(op, "NOP") == 0) { emitb(0x00); return 0; }
+  if (strcmp(op, "HALT") == 0) { emitb(0x76); return 0; }
+  if (strcmp(op, "DI") == 0) { emitb(0xF3); return 0; }
+  if (strcmp(op, "EI") == 0) { emitb(0xFB); return 0; }
+  if (strcmp(op, "CPL") == 0) { emitb(0x2F); return 0; }
+  if (strcmp(op, "SCF") == 0) { emitb(0x37); return 0; }
+  if (strcmp(op, "CCF") == 0) { emitb(0x3F); return 0; }
+  if (strcmp(op, "DAA") == 0) { emitb(0x27); return 0; }
+  if (strcmp(op, "RLCA") == 0) { emitb(0x07); return 0; }
+  if (strcmp(op, "RRCA") == 0) { emitb(0x0F); return 0; }
+  if (strcmp(op, "RLA") == 0) { emitb(0x17); return 0; }
+  if (strcmp(op, "RRA") == 0) { emitb(0x1F); return 0; }
+  if (strcmp(op, "EXX") == 0) { emitb(0xD9); return 0; }
+
+  /* now comes the argument-based operations */
+  /* load/store*/
+  if (strcmp(op, "LD") == 0) {
+    /* 8-bit operations first */
+    reg1 = reg8(arg1);
+    reg2 = reg8(arg2);
+
+    /* both are registers */
+    if (reg1 != -1 && reg2 != -1) {
+      if (reg1 == 6 || reg2 == 6) return -1; /* not possible */
+      emitb(0x40 + (reg2 << 3) + reg1); /* or reg2 * 8, but shift is more efficient */
+      return 0;
+    }
+
+    /* only arg1 is a register, arg2 is an immediate value */
+    if (reg1 != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(0x06 + (reg1 << 3));
+      emitb(imm);
+      return 0;
+    }
+
+
+    /* 16-bit operations */
+    rr = reg16(arg1);
+
+    /* immediate*/
+    if (rr != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(0x01 + (rr << 4));
+      emitw(imm);
+      return 0;
+    }
+
+    /* special 16-bit ops, */
+    if ((strcmp(arg1, "A") == 0) && (strcmp(arg2, "(BC)") == 0)) { emitb(0x0A); return 0; }
+    if ((strcmp(arg1, "A") == 0) && (strcmp(arg2, "(DE)") == 0)) { emitb(0x1A); return 0; }
+    if ((strcmp(arg1, "(BC)") == 0) && (strcmp(arg2, "A") == 0)) { emitb(0x02); return 0; }
+    if ((strcmp(arg1, "(DE)") == 0) && (strcmp(arg2, "A") == 0)) { emitb(0x12); return 0; }
+
+    /* absolute address */
+    addr = mem_addr(arg2);
+    if (strcmp(arg1, "A") == 0 && addr >= 0) {
+      /* LD A, (nn) */
+      emitb(0x3A);
+      emitw((uint16_t)addr);
+      return 0;
+    }
+    if (strcmp(arg1, "HL") == 0 && addr >= 0) {
+      /* LD HL, (nn) */
+      emitb(0x2A);
+      emitw((uint16_t)addr);
+      return 0;
+    }
+
+    addr = mem_addr(arg1);
+    if (strcmp(arg2, "A") == 0 && addr >= 0) {
+      /* LD (nn), A */
+      emitb(0x32);
+      emitw((uint16_t)addr);
+      return 0;
+    }
+    if (strcmp(arg2, "HL") == 0 && addr >= 0) {
+      /* LD (nn), HL */
+      emitb(0x22);
+      emitw((uint16_t)addr);
+      return 0;
+    }
+
+    if (strcmp(arg1, "SP") == 0 && strcmp(arg2, "HL") == 0) {
+      emitb(0xF9);
+      return 0;
+    }
+  }
+
+  /* increment */
+  if (strcmp(op, "INC") == 0) {
+    reg1 = reg8(arg1);
+    if (reg1 != -1) {
+      emitb(0x04 + (reg1 << 3));
+      return 0;
+    }
+
+    /* 16-bit*/
+    rr = reg16(arg1);
+    if (rr != -1) {
+      emitb(0x03 + (rr << 4));
+      return 0;
+    }
+  }
+  /* decrement */
+  if (strcmp(op, "DEC") == 0) {
+    reg1 = reg8(arg1);
+    if (reg1 != -1) {
+      emitb(0x05 + (reg1 << 3));
+      return 0;
+    }
+
+    /* 16-bit*/
+    rr = reg16(arg1);
+    if (rr != -1) {
+      emitb(0x0B + (rr << 4));
+      return 0;
+    }
+  }
+
+  /* add*/
+  if (strcmp(op, "ADD") == 0) {
+    /* 8bit*/
+    if (strcmp(arg1, "A") == 0) {
+      reg1 = reg8(arg2);
+      if (reg1 != -1) {
+        emitb(0x80 + reg1);
+        return 0;
+      }
+
+      /* immediate */
+      imm = strtol(arg2, NULL, 0);
+      emitb(0xC6);
+      emitb(imm);
+      return 0;
+    }
+
+    /* 16 bit*/
+    if (strcmp(arg1, "HL") == 0) {
+      rr = reg16(arg2);
+      if (rr != -1) {
+        emitb(0x09 + (rr << 4));
+        return 0;
+      }
+    }
+
+    return -1; /* no valid op*/
+  }
+
+  /* add with carry*/
+  if (strcmp(op, "ADC") == 0) {
+    if (strcmp(arg1, "A") != 0) return -1;
+    reg1 = reg8(arg2);
+    if (reg1 != -1) {
+      emitb(0x88 + reg1);
+      return 0;
+    }
+
+    /* immediate */
+    imm = strtol(arg2, NULL, 0);
+    emitb(0xCE);
+    emitb(imm);
+    return 0;
+  }
+
+  /* subtract */
+  if (strcmp(op, "SBC") == 0) {
+    reg1 = reg8(arg1);
+    if (reg1 != -1) {
+      emitb(0x90 + reg1);
+      return 0;
+    }
+
+    /* immediate */
+    imm = strtol(arg1, NULL, 0);
+    emitb(0xCE);
+    emitb(imm);
+    return 0;
+  }
+
+  /* subtract with carry*/
+  if (strcmp(op, "SBC") == 0) {
+    if (strcmp(arg1, "A") != 0) return -1;
+    reg1 = reg8(arg2);
+    if (reg1 != -1) {
+      emitb(0x98 + reg1);
+      return 0;
+    }
+
+    /* immediate */
+    imm = strtol(arg2, NULL, 0);
+    emitb(0xDE);
+    emitb(imm);
+    return 0;
+  }
+
+  /* logical operations */
+  if (strcmp(op, "AND") == 0 || strcmp(op, "OR") == 0 || strcmp(op, "XOR") == 0 || strcmp(op, "CP") == 0) {
+    int base = 0; /* base opcode with register */
+    int imm_base = 0; /* immediate opcode */
+
+    if (strcmp(op, "AND") == 0) {
+      base = 0xA0;
+      imm_base = 0xE6;
+    } else if (strcmp(op, "OR") == 0) {
+      base = 0xB0;
+      imm_base = 0xF6;
+    } else if (strcmp(op, "XOR") == 0) {
+      base = 0xA8;
+      imm_base = 0xEE;
+    } else if (strcmp(op, "CP") == 0) {
+      base = 0xB8;
+      imm_base = 0xFE;
+    }
+
+    /* register */
+    reg1 = reg8(arg1);
+    if (reg1 != -1) {
+      emitb(base + reg1);
+      return 0;
+    }
+
+    /* immediate */
+    imm = strtol(arg1, NULL, 0);
+    emitb(imm_base);
+    emitb(imm);
+    return 0;
+  }
+
+  /* push/pop*/
+  if (strcmp(op, "PUSH") == 0) {
+    rr = reg16af(arg1);
+    if (rr != -1) {
+      emitb(0xC5 + (rr << 4));
+      return 0;
+    }
+  }
+  if (strcmp(op, "POP") == 0) {
+    rr = reg16af(arg1);
+    if (rr != -1) {
+      emitb(0xC1 + (rr << 4));
+      return 0;
+    }
+  }
+
+  /* reset vectors */
+  if (strcmp(op, "RST") == 0) {
+    imm = strtol(arg1, NULL, 0);
+    if (imm >= 0 && imm <= 0x38) {
+      emitb(0xC7 + imm);
+      return 0;
+    }
+    return -1;
+  }
+
+  /* buggy jumps, TODO: fix*/
+  /* jump absolute */
+  if (strcmp(op, "JP") == 0) {
+    /* JP (HL)*/
+    if (strcmp(arg1, "(HL)") == 0 && arg1[0] == 0) {
+      emitb(0xE9);
+      return 0;
+    }
+
+    /* JP cond, nn*/
+    if (arg2[0] != 0) {
+      cond = jpcond(arg1);
+      if (cond == -1) return -1;
+      imm = strtol(arg2, NULL, 0);
+      emitb(0xC2 + (cond << 3));
+      emitw(imm);
+      return 0;
+    }
+
+      /* JP nn */
+    if (arg1[0] != 0) {
+      imm = strtol(arg1, NULL, 0);
+      emitb(0xC3);
+      emitw(imm);
+      return 0;
+    }
+
+    return -1;
+  }
+
+  /* jump relative, from current position */
+  if (strcmp(op, "JR") == 0) {
+    int curr_pc = pc;
+
+    /* JR cond, d*/
+    if (arg2[0] != 0) {
+      cond = jpcond(arg1);
+      if (cond == -1) return -1;
+      emitb(0x20 + (cond << 3));
+      return emit_rel(arg2, curr_pc);
+    }
+
+    /* JR d */
+    if (arg1[0] != 0) {
+      emitb(0x18);
+      return emit_rel(arg1, curr_pc);
+    }
+
+    return -1;
+  }
+
+  return 0;
+}
+
+
+int main(int argc, char *argv[]) {
+  if (argc < 3) {
+    putstr("Usage: ./asmz80 <input.asm> <output.bin>\n");
+    return -1;
+  }
+
+  /* takes the input and output file names */
+  putstr("asmz80 - z80 assembler\n"); /* or sasmz80 shitty z80 assembler :)*/
+
+  /* random */
+  putstr(argv[1]);
+  putstr(" -> ");
+  putstr(argv[2]);
+  putstr("\n");
+
+  int infd = open(argv[1], O_RDONLY, 0);
+  if (infd == -1) {
+    putstr("Couldn't open input file\n");
+    return -1;
+  }
+
+  int input_size = lseek(infd, 0, SEEK_END);
+  lseek(infd, 0, SEEK_SET); /* simple size get hack*/
+
+  outputfd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (outputfd == -1) {
+    putstr("Couldn't open output file\n");
+    return -1;
+  }
+  /* main loop doing the assembly */
+  /* read line by line and assemble by it*/
+  int line_number = 0; /* debug */
+  char line[127];
+  while (1) {
+    int i = 0;
+    int code = 1; /* default to error*/
+    memset(line, 0, 127);
+    /* read until newline */
+    for (; i < sizeof(line) - 1; i++) {
+      code = read(infd, &line[i], 1);
+      if (code <= 0) break;
+      if (line[i] == '\n') {
+        line[i] = '\0';
+        break;
+      }
+    }
+
+    if (code == 0 && i == 0) {
+      /* end of file */
+      break;
+    }
+
+    if (code < 0) { /* error reading it*/
+      putstr("Error reading input file\n");
+      break;
+    }
+
+    line[i] = '\0'; /* null terminate */
+
+    if (line_codegen(line) < 0) { /* assemble the line*/
+      putstr("Error assembling line\n");
+      break;
+    }
+    line_number++;
+  }
+
+  close(infd);
+  close(outputfd);
+
+  return 0;
+}

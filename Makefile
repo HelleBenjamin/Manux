@@ -87,7 +87,7 @@ posix_lib: build $(POBJ)
 	$(AS) -xlibposix.lib $(POBJ)
 	mv libposix.lib $(BUILDDIR)/
 
-mfs-util: mfs-util
+mfs-util: mfs-util.c
 	gcc -O2 mfs-util.c -o mfs-util
 
 disk: # 1.44mb image, floppy as reference
@@ -109,6 +109,9 @@ clean:
 
 disasm:
 	z88dk-dis -mz80 -o 0x0000 -x $(BUILDDIR)/MANUX.map $(BUILDDIR)/MANUX.rom > MANUX.asm
+
+testprogram:
+	./mfs-util -w -f test.asm -fd disk.img
 
 emulate:
 	$(BEMU80) --rom $(BUILDDIR)/MANUX.rom --fd disk.img

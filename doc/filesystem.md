@@ -8,6 +8,12 @@ There is a tool called `mfs-util` which can be used to manage the filesystem fro
 
 This document is not complete yet, but gives the core idea.
 
+Filesystem versions
+-------------------
+
+- 1.0 - Initial RAM only version, released in v0.2.0, no checksum
+- 1.1 - First version with disk support, released in v0.3.0, checksum `BEEF`
+
 FS Characteristics
 ------------------
 
@@ -19,7 +25,6 @@ FS Characteristics
 - Block header size: 4 bytes
 - Data per block: 508 bytes
 - Filesystem checksum: 0xBEEF
-- Open file model: single file open at a time
 
 Root FS structure
 -----------------
@@ -81,3 +86,27 @@ The filesystem uses fixed memory addresses.
 
 - FS_BUF, 0xF000, DMA buffer for disk I/O
 - FS_ROOT_MADDR, 0xF200, Cached root directory in memory
+
+Functions `mfs_sync` or `write_changes` writes the root sector in memory to disk.
+
+
+File descriptors
+-----------------
+
+Manux supports simplified version of file descriptor(s), or FD(s). I'm not going to dive deep how they work.
+FDs are tightly integrated with the MFS filesystem.
+FDs also make the OS POSIX compliant. 
+
+The current FD implementation in C:
+```C
+typedef struct {
+  uint8_t type; /* file, etc..*/
+  uint8_t flags; /* read write*/
+  uint16_t pos; /* rw position*/
+  uint16_t cur_block; /* current block */
+  uint16_t prev_block; /* previous block */
+  uint16_t block_offset; /* byte offset */
+  file* file;
+} fd_entry;
+```
+Note that `file` is in MFS format.

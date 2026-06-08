@@ -122,7 +122,8 @@ int main(void) {
     }
 
     if (strncmp("./", command, 2) == 0) { /* run file */
-      execv(command + 2, argvv); /* execute with arguments */
+      code = execv(command + 2, argvv); /* execute with arguments */
+      if (code == -1) putstr("No such file\n\r"); /* no valid program*/
       continue;
     }
     /* no valid command*/

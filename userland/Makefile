@@ -1,6 +1,6 @@
 
 # programs that will be built and included in the image
-SOURCES := ecalc.c
+SOURCES := ecalc.c asmz80.c
 
 # shell, don't touch unless replacing it with another one
 SHELL_SRC := shell.c
@@ -24,8 +24,11 @@ all: build $(OBJECTS) build/SHELL.BIN final_image
 
 # build the final image that contains userland tools
 final_image: all
-	$(ROOTDIR)/mfs-util -s $(BUILDDIR)/SHELL.BIN -fd $(ROOTDIR)/disk.img
-	$(foreach bin, $(BINARIES), $(ROOTDIR)/mfs-util -s $(bin) -fd $(ROOTDIR)/disk.img; )
+# format first
+	$(ROOTDIR)/mfs-util -f -fd $(ROOTDIR)/disk.img
+# then write
+	$(ROOTDIR)/mfs-util -w -f $(BUILDDIR)/SHELL.BIN -fd $(ROOTDIR)/disk.img
+	$(foreach bin, $(BINARIES), $(ROOTDIR)/mfs-util -w -f $(bin) -fd $(ROOTDIR)/disk.img; )
 	
 
 build:

@@ -38,6 +38,7 @@
 int mfs_delete(char *fname);
 
 /* This is a tool which is used to write files into MFS formated disk images */
+/* Use this only on Linux, etc. Not intended for use on Manux. */
 
 FILE* disk;
 
@@ -45,7 +46,8 @@ FILE* disk;
 #define MAX_FILES     12
 #define MAX_FNAME_LEN 12
 
-#define CHECKSUM      0xBEEF 
+/* Checksum is also version dependent, for example v1.1 is 0xBEEF */
+#define CHECKSUM      0xBEEF /* v1.1 */
 
 #define FS_BUF        0x0000 /* Single sector sized buffer */
 #define FS_ROOT_MADDR 0x0200 /* Start of root directory in emulated RAM */
@@ -131,21 +133,18 @@ int disk_write(char *buffer, uint16_t sector, uint8_t num_sectors) {
   return (n == num_sectors) ? 0 : 1;
 }
 
-
-
-int mfs_format(void);
-
 int mfs_init(void) {
   /* Load filesystem to memory, etc..*/
   if(disk_read((char *)fs_rootfs, FS_ROOT_SECTOR, 1) == 0) {
     if(*((uint16_t *)checksum) != CHECKSUM) {
-      printf(" Root FS checksum incorrect. Some files may be corrupted. This is normal for a fresh disk image\n");
+      printf(" Root FS checksum incorrect. Filesystem may not be formatted or is wrong version\n");
+      printf("Read checksum: 0x%04X, expected: 0x%04X\n", *((uint16_t *)checksum), CHECKSUM);
     } if (*formatted == 0) {
-      printf(" Root FS not formatted yet. Formatting\n");
-      mfs_format();
+      printf(" Root FS not formatted yet. It needs to be formatted. Format with ./mfs-util -f\n");
     }
     printf(" Root FS loaded\n");
   } else { printf(" Loading Root FS failed\n"); return 1; }
+  memset(&current_fd, 0, sizeof(mfs_fd));
   return 0;
 }
 
@@ -190,7 +189,7 @@ uint16_t find_free_block(void) {
     disk_read(tempbuf2, i, 1);
     if (tempbuf2[0] == 0) {
       int is_allocated = 0;
-      for (uint16_t j = 0; j < *filecount; ++j) {
+      for (uint16_t j = 0; j < MAX_FILES; ++j) {
         uint16_t next_block = files[j].block;
         while (next_block != 0 && next_block < FS_MAX_SECTORS) {
           if (next_block == i) {
@@ -211,7 +210,7 @@ uint16_t find_free_block(void) {
 }
 
 file* find_file(char *fname) {
-  for (uint8_t i = 0; i < *filecount; ++i) {
+  for (uint8_t i = 0; i < MAX_FILES; ++i) {
     if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
       return &files[i]; /* return pointer to the file*/
     }
@@ -220,7 +219,7 @@ file* find_file(char *fname) {
 }
 
 uint16_t get_file_block(char *fname) {
-  for (uint8_t i = 0; i < *filecount; ++i) {
+  for (uint8_t i = 0; i < MAX_FILES; ++i) {
     if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
       return files[i].block;
     }
@@ -229,7 +228,7 @@ uint16_t get_file_block(char *fname) {
 }
 
 uint8_t get_file_index(char *fname) {
-  for (uint8_t i = 0; i < *filecount; ++i) {
+  for (uint8_t i = 0; i < MAX_FILES; ++i) {
     if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
       return i;
     }
@@ -241,17 +240,19 @@ uint16_t load_to_memory(char *fname) {
   /* load a file to fixed address 0x4000*/
   int i = get_file_index(fname);
   if (i == 0xFF) return 1;
+
   int16_t remaining = files[i].size;
-  uint16_t bytes_in_block;
+  uint16_t bytes_in_block = 0;
   uint16_t sector = files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
 
-  uint16_t offset = 0x0020; /* Space for PIH, kernel creates the PIH */
+  uint16_t offset = 0x0000; /* Space for PIH, kernel creates the PIH */
   uint8_t* dest = (uint8_t*)fs_program_buf;
 
   while (remaining != 0 && sector != 0 && sector < FS_MAX_SECTORS) {
     bytes_in_block = (remaining > BLOCK_SIZE-4) ? (BLOCK_SIZE-4) : remaining;
     disk_read((char *)tempbuf, sector, 1);
-    memcpy(dest+offset, tempbuf+4, bytes_in_block);
+
+    memcpy((uint8_t*)dest+offset, tempbuf+4, bytes_in_block);
 
     offset += bytes_in_block;
     remaining -= bytes_in_block;
@@ -268,6 +269,7 @@ uint16_t save_to_disk(char *fname) {
   /* automatically overwrite the existing file*/
   file temp = files[i];
   mfs_delete(fname); /* delete it first */
+  (*filecount)++; /* dirty hack*/
 
   /* figure out how many blocks we need */
   int16_t remaining = temp.size;
@@ -290,7 +292,7 @@ uint16_t save_to_disk(char *fname) {
   }
 
   /* todo: dynamically allocate to ram*/
-  uint16_t offset = 0x0020;
+  uint16_t offset = 0x0000;
   uint8_t *src = (uint8_t*)fs_program_buf;
   temp.block = block_sectors[0];
   temp.block_size = 0;
@@ -362,6 +364,7 @@ int mfs_open(char *fname, int flags) {
     disk_write((char *)tempbuf, block, 1); /* Reserve first block, write it immediately */
 
     ++(*filecount); /* update filecount */
+    write_changes();
 
     current_file = &files[index];
   } else if (current_file == NULL) return -1; /* file doesn't exist and O_CREAT not set */
@@ -391,8 +394,7 @@ int mfs_read(char *buf, uint16_t count) {
   }
   /* read from memory */
   /* TODO: add position*/
-  /* !!! ADD +0x20 offset to the real MFS FILE!!!!!*/
-  memcpy(buf, (uint8_t*)fs_program_buf+0x20, count); /* simple as it is*/
+  memcpy(buf, (uint8_t*)fs_program_buf, count); /* simple as it is*/
 
   return 0;
 }
@@ -405,7 +407,7 @@ int mfs_write(char *buf, uint16_t count) {
   /* TODO: add position*/
   //current_file->size += count; // when position added
   current_file->size = count; /* for now */
-  memcpy((uint8_t*)fs_program_buf+0x20, buf, count); /* simple as it is again, it's way easier to work in memory than on the disk*/
+  memcpy((uint8_t*)fs_program_buf, buf, count); /* simple as it is again, it's way easier to work in memory than on the disk*/
 
   return 0;
 }
@@ -418,23 +420,16 @@ int mfs_sync() {
 }
 
 int dump_fs() {
-  printf("Filesystem debug info:\n");
-  printf("Checksum: %d\n", *(uint16_t *)checksum);
+  printf("Filesystem info:\n");
+  printf("Checksum: %04x\n", *(uint16_t *)checksum);
   printf("Formatted: %d\n", *formatted);
   printf("Filecount: %d\n", *filecount);
-  printf("Filetable: ");
+  printf("Files: ");
   for (uint8_t i = 0; i < *filecount; ++i) {
     printf("%s ", files[i].name);
   }
   printf("\n");
   return 0;
-}
-
-int dump_prog_buffer() {
-  /* print first 255 bytes */
-  for (int i = 0; i < 255; i++) {
-    printf("%02x", temppbuf[i]);
-  }
 }
 
 int mfs_delete(char *fname) {
@@ -461,7 +456,8 @@ int mfs_delete(char *fname) {
   tempfile->block = 0;
   tempfile->block_size = 0;
 
-  //--(*filecount);
+  --(*filecount);
+  write_changes(); /* save immediately */
 
   return 0;
 }
@@ -469,23 +465,46 @@ int mfs_delete(char *fname) {
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    printf("Usage: ./mfs-util -s <file> -fd <disk>\n");
+    printf("Usage: ./mfs-util <operation> <args>\n");
+    printf("Use -h for help\n");
     return 1;
   }
 
-  FILE* file = NULL;
-  char filename[256] = {0};
+  /* available operations:
+    -l: list files
+    -d: delete file
+    -w: write file to MFS
+    -r: read file from MFS
+    -f: format disk
+    -h: help message
+  */
 
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-s") == 0) {
-      file = fopen(argv[i+1], "rb");
+  char *op = argv[1];
+  int code;
+
+  if (strcmp(op, "-h") == 0) {
+    printf("--MFS Utility--\n");
+    printf("Available operations:\n");
+    printf("\t-l: list files\n");
+    printf("\t-d: delete file\n");
+    printf("\t-w: write file to MFS\n");
+    printf("\t-r: read file from MFS\n");
+    printf("\t-f: format disk\n");
+    printf("\t-h: this help message\n");
+    printf("Other args available(after operation):\n");
+    printf("\t-fd: specify MFS disk image\n");
+    printf("\t-f: specify file to operate on, this could be a host file or a file in MFS\n");
+    printf("Example usage: ./mfs-util -w -f file1.txt -fd disk.img\n");
+    return 0;
+  }
+
+  char filename[256] = {0}; /* filename with path */
+
+  for (int i = 2; i < argc; i++) {
+    if (strcmp(argv[i], "-f") == 0) { /* either file in MFS or host file */
       strcpy(filename, argv[i+1]); /* filename with extension*/
-      if (file == NULL) {
-        perror("fopen");
-        return 1;
-      }
     }
-    else if (strcmp(argv[i], "-fd") == 0) {
+    else if (strcmp(argv[i], "-fd") == 0) { /* MFS disk */
       disk = fopen(argv[i+1], "r+b");
       if (disk == NULL) {
         perror("fopen");
@@ -495,51 +514,116 @@ int main(int argc, char **argv) {
 
   }
 
-  /* Safety checks, prevents segfaults and such*/
-  if (file == NULL) {
-    printf("No file specified");
-    return 1;
-  }
-  if (disk == NULL) {
-    printf("No disk specified\n");
-    return 1;
-  }
-
-  if (mfs_init() != 0) return 1;
-
-  /* read host file into buffer*/
-  fseek(file, 0, SEEK_END);
-  long fsize = ftell(file);
-  fseek(file, 0, SEEK_SET);
-
-  char *buf = malloc(fsize);
-  if (!buf) return 1;
-
-  fread(buf, 1, fsize, file);
-
-  /* remove directory from filename*/
-  char fname[13] = {0};
+  /* formatted filename, MFS format */
+  char fname[12] = {0};
   char *p = strrchr(filename, '/');
   const char *base = p ? p + 1 : filename;
   strncpy(fname, base, sizeof(fname) - 1);
   fname[sizeof(fname) - 1] = '\0';
 
-  /* write into the FS */
-  if (mfs_open(fname, O_CREAT) != 0) {
-    printf("open failed\n");
+  /* disk image is required */
+  if (disk == NULL) {
+    printf("No disk specified\n");
     return 1;
   }
 
-  mfs_write(buf, (uint16_t)fsize);
-  mfs_close();
+  /* init MFS */
+  if (mfs_init() != 0) {
+    printf("MFS init failed\n");
+    return 1;
+  }
 
-  /* write changes to disk*/
-  mfs_sync();
+  /* what operation? */
+  if (strcmp(op, "-l") == 0) {
+    /* list files */
+    dump_fs();
+    code = 0;
+  }
+  else if (strcmp(op, "-d") == 0) {
+    /* delete file */
+    code = mfs_delete(fname);
+  }
+  else if (strcmp(op, "-w") == 0) {
+    /* write file to MFS */
+    printf("Writing %s to MFS\n", fname);
+    FILE* file = fopen(filename, "rb");
+    if (file == NULL) {
+      perror("fopen");
+      return 1;
+    }
+    /* read host file into buffer*/
+    fseek(file, 0, SEEK_END);
+    long fsize = ftell(file);
+    fseek(file, 0, SEEK_SET);
 
-  printf("Wrote %ld bytes to %s\n", fsize, fname);
+    char *buf = malloc(fsize);
+    if (!buf) return 1;
 
-  free(buf);
-  fclose(file);
+    fread(buf, 1, fsize, file);
+
+    int code = mfs_open(fname, O_CREAT);
+
+    /* write into the FS */
+    if (code != 0) {
+      printf("open failed. code: %d\n", code);
+      return 1;
+    }
+
+    mfs_write(buf, (uint16_t)fsize);
+    mfs_close();
+
+    /* write changes to disk*/
+    mfs_sync();
+
+    printf("Wrote %ld bytes to %s\n", fsize, fname);
+
+    free(buf);
+    fclose(file);
+  }
+  else if (strcmp(op, "-r") == 0) {
+    /* read file from MFS */
+    /* read the file from MFS first*/
+    printf("Reading %s from MFS\n", fname);
+    file* tempfile = find_file(fname);
+    if (tempfile == NULL) {
+      printf("File not found\n");
+      return 1;
+    }
+    char* buf = malloc(tempfile->size);
+    if (!buf) return 1;
+
+    int code = mfs_open(fname, O_RDONLY);
+
+    if (code != 0) {
+      printf("Failed to open file. Code: %d\n", code);
+      free(buf);
+      return 1;
+    }
+
+    code = mfs_read(buf, tempfile->size);
+    if (code != 0) {
+      printf("Failed to read file. Code: %d\n", code);
+      free(buf);
+      return 1;
+    }
+
+    /* then write it to a host file */
+    FILE* file = fopen(fname, "w");
+    if (file == NULL) {
+      perror("fopen");
+      free(buf);
+      return 1;
+    }
+    fwrite(buf, 1, tempfile->size, file);
+    fclose(file);
+    free(buf);
+  }
+  else if (strcmp(op, "-f") == 0) {
+    /* format disk */
+    code = mfs_format();
+  }
+
+
   fclose(disk);
 
   return 0;

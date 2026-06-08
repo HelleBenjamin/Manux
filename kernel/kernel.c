@@ -7,6 +7,8 @@
 #include <driver/tty.h>
 #include <string.h>
 
+uint8_t* kernel_flags = (uint8_t*)KERNEL_FLAGS;
+
 int kernel_main(void) {
   tty_init();
   __asm__("ei\nim 1\n"); /* enable interrupts and set the interrupt mode to 1 */

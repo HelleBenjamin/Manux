@@ -2,7 +2,7 @@
 ; Copyright (c) 2025-2026 Benjamin Helle
 ;
 ; kmain.asm
-; Assembly kernel for Manux
+; Assembly kernel functions
 
 SECTION code_home ; Home section is only used for the kernel
 
@@ -18,7 +18,7 @@ SECTION code_home ; Home section is only used for the kernel
 
 
   ; Kernel flags
-  ; bit 0 - echo, should print text on gets
+  ; bit 0 - echo, should echo the character received
   ; bit 1 - unused
   ; bit 2 - unused
   ; bit 3 - unused
@@ -68,11 +68,11 @@ exec_init_jump:
   ld sp, SHELL_STACK
   jp 0x3000
 
-MINIMAL_PUTS:
+MINIMAL_PUTS: ; like kputs
   LD A, (HL)
   OR A
   RET Z
-  OUT ($81), A
+  OUT ($81), A ; doesn't work with other ports
   INC HL
   JR MINIMAL_PUTS
 REG_DUMP:

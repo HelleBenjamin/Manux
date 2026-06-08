@@ -46,7 +46,7 @@ int mfs_init(void) {
   /* Load filesystem root block to memory, etc..*/
   if(disk_read((char *)fs, FS_ROOT_SECTOR, 1) == 0) {
     if(fs->checksum != CHECKSUM) {
-      kputs(" Root FS checksum incorrect. Some files may be corrupted\n");
+      kputs(" Root FS checksum incorrect. Filesystem may not be formatted or is wrong version\n");
     } if (fs->formatted == 0) {
       kputs(" Root FS not formatted yet. Format? (y/n): ");
       char input = kgetchar();
@@ -81,7 +81,8 @@ int mfs_exit(void) {
   return 0;
 }
 
-void print_file_info(file *f) __z88dk_fastcall {
+// debug only
+/*void print_file_info(file *f) __z88dk_fastcall {
   kputs("File: ");
   kputs(f->name);
   kputchar('\n');
@@ -94,7 +95,7 @@ void print_file_info(file *f) __z88dk_fastcall {
   kputs("First Block: ");
   kputh(f->block);
   kputchar('\n');
-}
+}*/
 
 void write_changes(void) {
   /* Save root to disk*/
@@ -130,7 +131,7 @@ uint16_t find_free_block(void) {
 }
 
 file* find_file(char *fname) __z88dk_fastcall {
-  for (uint8_t i = 0; i < fs->filecount; ++i) {
+  for (uint8_t i = 0; i < fs->filecount; ++i) { // or MAX_FILES but slower. filecount should be fine
     if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
       return &fs->files[i]; /* return pointer to the file*/
     }
@@ -418,7 +419,7 @@ int mfs_seek(int fd, uint16_t pos, int whence) {
   entry->pos = pos;
   entry->cur_block = block;
   entry->block_offset = offset;
-  return 0;
+  return pos; /* return the new position */
 }
 
 int dump_fs(void) {
@@ -426,7 +427,7 @@ int dump_fs(void) {
   kputs("Checksum: "); kputh(fs->checksum); kputs("\n");
   kputs("Formatted: "); kputh(fs->formatted); kputs("\n");
   kputs("Filecount: "); kputh(fs->filecount); kputs("\n");
-  kputs("Filetable: ");
+  kputs("Files: ");
   for (uint8_t i = 0; i < fs->filecount; ++i) {
     kputs(fs->files[i].name);
     kputchar(' ');

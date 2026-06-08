@@ -5,7 +5,7 @@ Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotas
 Manux runs on a custom Z80 emulator called bemu80(https://github.com/HelleBenjamin/bemu80).
 The emulator is included in the repository and can be built using `make bemu80`.
 
-I'd recommend seeing the `doc/` folder for more information about the OS and its functions.
+I'd recommend checking out the `doc/` folder for more information about the OS and its functions.
 
 Main features
 =============
@@ -20,6 +20,7 @@ Status
 ======
 The kernel is currently under development.
 Most of the features are working as intended, but there are still some bugs and missing features.
+Latest stable version: v0.3.0
 
 System calls
 ============
@@ -38,7 +39,7 @@ See `doc/syscalls.md` for more information
 POSIX support
 =============
 Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs.
-See `include/sys/unistd.h` for currently supported functions.
+See `include/sys/` folder for currently supported functions.
 
 Minimum system requirements
 ===========================
@@ -71,6 +72,9 @@ Currently stdio is not supported, so use read/write from unistd instead.
 
 Userland programs are located in `userland/` directory. See its README for more information.
 
+The OS comes with a few programs included in the `userland/` directory.
+There are `ecalc`(a simple calculator) and `asmz80`(a simple assembler, buggy).
+
 Pre-requisites
 ==============
 - z88dk 2.4(or newer)
@@ -81,7 +85,7 @@ Pre-requisites
 
 Building
 ========
-Configure Manux using `kconfig-mconf Kconfig`.
+Configure Manux using `kconfig-mconf Kconfig`. There's a preconfigured `.config` file included.
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel.
 
 Here's the steps to build Manux:
@@ -93,6 +97,8 @@ Here's the steps to build Manux:
 6. `make bemu80`, this builds bemu80
 7. `make`, this builds all, kernel, userland, etc..
 8. `make emulate`, run the OS in bemu80
+
+`make testprogram` adds file `test.asm`, useful for testing the assembler
 
 Note that compilation can take a while due to SDCC's optimizer. 
 Reduce `--max-allocs-per-node100000` to 10000 if you want to build faster at the cost of code size and speed.
