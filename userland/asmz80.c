@@ -419,7 +419,7 @@ int line_codegen(char *line) {
   }
 
   /* subtract */
-  if (strcmp(op, "SBC") == 0) {
+  if (strcmp(op, "SUB") == 0) {
     reg1 = reg8(arg1);
     if (reg1 != -1) {
       emitb(0x90 + reg1);
