@@ -6,7 +6,16 @@
 */
 
 /* this is very barebones, supports small subset of z80 instructions */
-/* I wrote this in a day, so it needs proper testing and bug fixing*/
+/* I wrote this initially in a day, so it needs proper testing and bug fixing, and optimization*/
+
+/* CHANGELOG */
+/* 
+2026-06-08: 
+  Initial release, first version
+
+2026-06-11: 
+  Added label support, two-pass system
+*/
 
 #ifdef __linux
 #include <unistd.h>
@@ -22,7 +31,16 @@
 #include <stdlib.h>
 
 int outputfd; /* output file descriptor */
-uint16_t pc = 0; /* program counter, keeps track of current address */
+uint16_t pc = 0x4100; /* program counter, keeps track of current address, defaults to 0x4100 */
+int pass = 0; /* pass number, 0 first pass: collect labels, pass 1: codegen*/
+
+struct label {
+  char name[20];
+  uint16_t address; /* absolute addr*/
+};
+
+struct label labels[16]; /* array of label structures, size can be adjusted */
+int num_labels = 0; /* number of labels found */
 
 /* stdout wrappers*/
 void putchr(char c) {
@@ -37,22 +55,47 @@ void newline(void) {
   putchr('\n');
 }
 
+int get_label_addr(char *name) {
+  if (!pass) return -1; /* pass not completed*/
+  for (uint8_t i = 0; i < num_labels; i++) {
+    if (strcmp(labels[i].name, name) == 0) { /* label found */
+      return labels[i].address;
+    }
+  }
+  return -1; /* label not found */
+}
 
 /* emit byte*/
 void emitb(uint8_t b) {
+  pc++; /* increment pc even when not generating, needed for labels*/
+  if (!pass) return; /* don't emit during first pass */
   write(outputfd, &b, 1);
-  pc++;
 }
 
 /* emit word */
 void emitw(uint16_t w) {
   /* little endian */
+  if (!pass) {
+    pc += 2;
+    return;
+  }
   emitb(w & 0xff);
   emitb((w >> 8) & 0xff);
 }
 
 int emit_rel(char *addr, uint16_t base_pc) {
-  int num = strtol(addr, NULL, 0);
+  /* check if label*/
+  int num;
+  int label = get_label_addr(addr);
+  if (label != -1) {
+    num = label;
+  } else { /* not label, immediate value*/
+    if (!pass) { /* placeholder byte during first pass for unresolved label */
+      emitb(0);
+      return 0;
+    }
+    num = strtol(addr, NULL, 0);
+  }
   int offset;
 
   /* if fit in 8-bit signed range */
@@ -149,6 +192,7 @@ int line_codegen(char *line) {
   int cond; /* condition, for jumps, etc.*/
   int addr; /* absolute address */
   int imm;
+  int label_addr; /* resolved label address, second pass only */
 
   /* remove comments */
   /* somehow doesn't work if line starts with a comment, fix */
@@ -169,6 +213,24 @@ int line_codegen(char *line) {
   char *token = strtok(line, " \t");
   if (!token) return -1;
   strncpy(op, token, sizeof(op) - 1);
+
+  /* check if label, ends with colon*/
+  if (op[strlen(op) - 1] == ':') {
+    op[strlen(op) - 1] = '\0';
+    if (!pass) {
+      if (num_labels >= (int)(sizeof(labels)/sizeof(labels[0]))) {
+        putstr("Too many labels\n");
+        return -1;
+      }
+      strncpy(labels[num_labels].name, op, sizeof(labels[num_labels].name) - 1);
+      labels[num_labels].name[sizeof(labels[num_labels].name) - 1] = '\0';
+      labels[num_labels].address = pc;
+      num_labels++;
+      return 0;
+    }
+    return 0;
+  }
+
   op[sizeof(op) - 1] = '\0';
 
   /* argument 1*/
@@ -446,7 +508,6 @@ int line_codegen(char *line) {
     return -1;
   }
 
-  /* buggy jumps, TODO: fix*/
   /* jump absolute */
   if (strcmp(op, "JP") == 0) {
     /* JP (HL)*/
@@ -459,17 +520,29 @@ int line_codegen(char *line) {
     if (arg2[0] != 0) {
       cond = jpcond(arg1);
       if (cond == -1) return -1;
-      imm = strtol(arg2, NULL, 0);
       emitb(0xC2 + (cond << 3));
-      emitw(imm);
+      label_addr = get_label_addr(arg2);
+      if (label_addr != -1) {
+        emitw(label_addr);
+        return 0;
+      } else { /* not label, raw address*/
+        imm = strtol(arg2, NULL, 0);
+        emitw(imm);
+      }
       return 0;
     }
 
       /* JP nn */
     if (arg1[0] != 0) {
-      imm = strtol(arg1, NULL, 0);
       emitb(0xC3);
-      emitw(imm);
+      label_addr = get_label_addr(arg1);
+      if (label_addr != -1) {
+        emitw(label_addr);
+        return 0;
+      } else {
+        imm = strtol(arg1, NULL, 0);
+        emitw(imm);
+      }
       return 0;
     }
 
@@ -503,8 +576,22 @@ int line_codegen(char *line) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    putstr("Usage: ./asmz80 <input.asm> <output.bin>\n");
+    putstr("Usage: ./asmz80 <input.asm> <output.bin> <additional_args>\n");
     return -1;
+  }
+
+  /* additional args 
+    * --org <addr> - start address
+  */
+
+  uint16_t basepc = pc;
+
+  /* parse additional arguments */
+  for (int i = 3; i < argc; i++) {
+    if (strcmp(argv[i], "--org") == 0 && i + 1 < argc) {
+      basepc = (uint16_t)strtol(argv[i + 1], NULL, 0);
+      i++;
+    }
   }
 
   /* takes the input and output file names */
@@ -516,6 +603,7 @@ int main(int argc, char *argv[]) {
   putstr(argv[2]);
   putstr("\n");
 
+  /* open the input file */
   int infd = open(argv[1], O_RDONLY, 0);
   if (infd == -1) {
     putstr("Couldn't open input file\n");
@@ -525,46 +613,53 @@ int main(int argc, char *argv[]) {
   int input_size = lseek(infd, 0, SEEK_END);
   lseek(infd, 0, SEEK_SET); /* simple size get hack*/
 
+  /* open the output file */
   outputfd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (outputfd == -1) {
     putstr("Couldn't open output file\n");
     return -1;
   }
+
   /* main loop doing the assembly */
   /* read line by line and assemble by it*/
-  int line_number = 0; /* debug */
   char line[127];
-  while (1) {
-    int i = 0;
-    int code = 1; /* default to error*/
-    memset(line, 0, 127);
-    /* read until newline */
-    for (; i < sizeof(line) - 1; i++) {
-      code = read(infd, &line[i], 1);
-      if (code <= 0) break;
-      if (line[i] == '\n') {
-        line[i] = '\0';
+  for (pass = 0; pass < 2; pass++) {
+    pc = basepc; /* reset the program counter */
+    /* rewind input file for each pass */
+    lseek(infd, 0, SEEK_SET);
+    int line_number = 0; /* debug */
+    while (1) {
+      int i = 0;
+      int code = 1; /* default to error*/
+      memset(line, 0, 127);
+      /* read until newline */
+      for (; i < sizeof(line) - 1; i++) {
+        code = read(infd, &line[i], 1);
+        if (code <= 0) break;
+        if (line[i] == '\n') {
+          line[i] = '\0';
+          break;
+        }
+      }
+
+      if (code == 0 && i == 0) {
+        /* end of file */
         break;
       }
-    }
 
-    if (code == 0 && i == 0) {
-      /* end of file */
-      break;
-    }
+      if (code < 0) { /* error reading it*/
+        putstr("Error reading input file\n");
+        break;
+      }
 
-    if (code < 0) { /* error reading it*/
-      putstr("Error reading input file\n");
-      break;
-    }
+      line[i] = '\0'; /* null terminate */
 
-    line[i] = '\0'; /* null terminate */
-
-    if (line_codegen(line) < 0) { /* assemble the line*/
-      putstr("Error assembling line\n");
-      break;
+      if (line_codegen(line) < 0) { /* assemble the line*/
+        putstr("Error assembling line\n");
+        break;
+      }
+      line_number++;
     }
-    line_number++;
   }
 
   close(infd);
