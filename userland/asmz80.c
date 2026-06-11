@@ -14,7 +14,7 @@
   Initial release, first version
 
 2026-06-11: 
-  Added label support, two-pass system, minor bug fixes
+  Added label support, two-pass system, minor bug fixes, added few instructions
 */
 
 #ifdef __linux
@@ -184,7 +184,7 @@ int mem_addr(char *addr) {
 /* single pass code generation, needs to be dual pass to support labels */
 int line_codegen(char *line) {
   /* global variables, makes debugging easier */
-  char op[6];
+  char op[20];
   char arg1[20];
   char arg2[20];
   int reg1, reg2; /* 8-bit registers */
@@ -195,7 +195,9 @@ int line_codegen(char *line) {
   int label_addr; /* resolved label address, second pass only */
 
   /* remove comments */
-  /* somehow doesn't work if line starts with a comment, fix */
+  if (line[0] == ';') {
+    return 0; /* if line starts with a comment, skip*/
+  }
   for (int i = 0; line[i]; i++) {
     if (line[i] == ';') {
       line[i] = '\0';
@@ -213,7 +215,7 @@ int line_codegen(char *line) {
   char *token = strtok(line, " \t");
   if (!token) return -1;
   strncpy(op, token, sizeof(op) - 1);
-
+  op[sizeof(op) - 1] = '\0';
   /* check if label, ends with colon*/
   if (op[strlen(op) - 1] == ':') {
     op[strlen(op) - 1] = '\0';
@@ -230,8 +232,6 @@ int line_codegen(char *line) {
     }
     return 0;
   }
-
-  op[sizeof(op) - 1] = '\0';
 
   /* argument 1*/
   token = strtok(NULL, " \t,");
@@ -398,8 +398,6 @@ int line_codegen(char *line) {
         return 0;
       }
     }
-
-    return -1; /* no valid op*/
   }
 
   /* add with carry*/
@@ -428,7 +426,7 @@ int line_codegen(char *line) {
 
     /* immediate */
     imm = strtol(arg1, NULL, 0);
-    emitb(0xCE);
+    emitb(0xD6);
     emitb(imm);
     return 0;
   }
@@ -505,13 +503,12 @@ int line_codegen(char *line) {
       emitb(0xC7 + imm);
       return 0;
     }
-    return -1;
   }
 
   /* jump absolute */
   if (strcmp(op, "JP") == 0) {
     /* JP (HL)*/
-    if (strcmp(arg1, "(HL)") == 0 && arg1[0] == 0) {
+    if (strcmp(arg1, "(HL)") == 0) {
       emitb(0xE9);
       return 0;
     }
@@ -524,7 +521,6 @@ int line_codegen(char *line) {
       label_addr = get_label_addr(arg2);
       if (label_addr != -1) {
         emitw(label_addr);
-        return 0;
       } else { /* not label, raw address*/
         imm = strtol(arg2, NULL, 0);
         emitw(imm);
@@ -538,15 +534,12 @@ int line_codegen(char *line) {
       label_addr = get_label_addr(arg1);
       if (label_addr != -1) {
         emitw(label_addr);
-        return 0;
       } else {
         imm = strtol(arg1, NULL, 0);
         emitw(imm);
       }
       return 0;
     }
-
-    return -1;
   }
 
   /* jump relative, from current position */
@@ -555,7 +548,7 @@ int line_codegen(char *line) {
 
     /* JR cond, d*/
     if (arg2[0] != 0) {
-      cond = jpcond(arg1);
+      cond = jrcond(arg1);
       if (cond == -1) return -1;
       emitb(0x20 + (cond << 3));
       return emit_rel(arg2, curr_pc);
@@ -566,11 +559,73 @@ int line_codegen(char *line) {
       emitb(0x18);
       return emit_rel(arg1, curr_pc);
     }
-
-    return -1;
   }
 
-  return 0;
+  /* call */
+  if (strcmp(op, "CALL") == 0) {
+    /* CALL cond, nn*/
+    if (arg2[0] != 0) {
+      cond = jpcond(arg1);
+      if (cond == -1) return -1;
+      emitb(0xC4 + (cond << 3));
+      label_addr = get_label_addr(arg2);
+      if (label_addr != -1) {
+        emitw(label_addr);
+      } else { /* not label, raw address*/
+        imm = strtol(arg2, NULL, 0);
+        emitw(imm);
+      }
+      return 0;
+    }
+
+    /* CALL nn */
+    if (arg1[0] != 0) {
+      emitb(0xCD);
+      label_addr = get_label_addr(arg1);
+      if (label_addr != -1) {
+        emitw(label_addr);
+      } else {
+        imm = strtol(arg1, NULL, 0);
+        emitw(imm);
+      }
+      return 0;
+    }
+  }
+
+  /* return */
+  if (strcmp(op, "RET") == 0) {
+    /* RET cond*/
+    if (arg1[0] != 0) {
+      cond = jpcond(arg1);
+      if (cond == -1) return -1;
+      emitb(0xC0 + (cond << 3));
+    } else { /* unconditional RET*/
+      emitb(0xC9);
+    }
+    return 0;
+  } 
+
+  /* IO*/
+  if (strcmp(op, "IN") == 0) {
+    /* IN A, (n) */
+    if (strcmp(arg1, "A") == 0 && arg2[0] != 0) {
+      imm = mem_addr(arg2);
+      emitb(0xDB);
+      emitb(imm);
+      return 0;
+    }
+  }
+  if (strcmp(op, "OUT") == 0) {
+    /* OUT (n), A */
+    if (strcmp(arg2, "A") == 0 && arg1[0] != 0) {
+      imm = mem_addr(arg1);
+      emitb(0xD3);
+      emitb(imm);
+      return 0;
+    }
+  }
+
+  return -1;
 }
 
 
@@ -655,7 +710,9 @@ int main(int argc, char *argv[]) {
       line[i] = '\0'; /* null terminate */
 
       if (line_codegen(line) < 0) { /* assemble the line*/
-        putstr("Error assembling line\n");
+        putstr("Error assembling line:");
+        putstr(line);
+        putstr("\n");
         break;
       }
       line_number++;
