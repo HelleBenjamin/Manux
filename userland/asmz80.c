@@ -14,7 +14,7 @@
   Initial release, first version
 
 2026-06-11: 
-  Added label support, two-pass system
+  Added label support, two-pass system, minor bug fixes
 */
 
 #ifdef __linux
@@ -277,7 +277,7 @@ int line_codegen(char *line) {
     /* both are registers */
     if (reg1 != -1 && reg2 != -1) {
       if (reg1 == 6 || reg2 == 6) return -1; /* not possible */
-      emitb(0x40 + (reg2 << 3) + reg1); /* or reg2 * 8, but shift is more efficient */
+      emitb(0x40 + (reg1 << 3) + reg2); /* or reg2 * 8, but shift is more efficient */
       return 0;
     }
 
