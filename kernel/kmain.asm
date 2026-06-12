@@ -13,7 +13,6 @@ SECTION code_home ; Home section is only used for the kernel
 
   PUBLIC KERNEL_ENTRY
   PUBLIC REG_DUMP
-  PUBLIC MINIMAL_PUTS
   PUBLIC STACKTRACE
 
 
@@ -54,12 +53,14 @@ KERNEL_ENTRY:
   JR _kernel_panic ; Kernel should never return
 
   PUBLIC _kernel_panic
+  EXTERN _kputs ; from kstdio.c
 _kernel_panic:
   LD HL, KP_MSG
-  CALL MINIMAL_PUTS
+  CALL _kputs
   CALL REG_DUMP
 
 KP_LOOP:
+  HLT
   JR KP_LOOP
 
 
@@ -68,13 +69,6 @@ exec_init_jump:
   ld sp, SHELL_STACK
   jp 0x3000
 
-MINIMAL_PUTS: ; like kputs
-  LD A, (HL)
-  OR A
-  RET Z
-  OUT ($81), A ; doesn't work with other ports
-  INC HL
-  JR MINIMAL_PUTS
 REG_DUMP:
   EXTERN _kputh
   ; Save the registers
@@ -93,31 +87,32 @@ REG_DUMP:
   PUSH BC
   PUSH AF
   LD HL, REG_AF
-  CALL MINIMAL_PUTS
+
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_BC
-  CALL MINIMAL_PUTS
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_DE
-  CALL MINIMAL_PUTS
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_HL
-  CALL MINIMAL_PUTS
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_IX
-  CALL MINIMAL_PUTS
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_IY
-  CALL MINIMAL_PUTS
+  CALL _kputs
   POP HL
   CALL _kputh
   LD HL, REG_SP
-  CALL MINIMAL_PUTS
+  CALL _kputs
   LD HL, 0
   ADD HL, SP ; Get current stack pointer
   CALL _kputh ; Print the stack pointer
@@ -135,7 +130,7 @@ STACKTRACE: ; C = depth
   PUSH HL ; Save HL
   LD HL, STACKTRACE_MSG
   EXTERN TRANSMIT_CHAR
-  CALL MINIMAL_PUTS ; Print the stacktrace message
+  CALL _kputs ; Print the stacktrace message
   LD HL, 0
   ADD HL, SP ; Get current stack pointer
   ST_LOOP:
