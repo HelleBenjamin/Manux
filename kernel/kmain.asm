@@ -55,8 +55,22 @@ KERNEL_ENTRY:
   PUBLIC _kernel_panic
   EXTERN _kputs ; from kstdio.c
 _kernel_panic:
+  ; preserve the exact state, helpful for debugging
+  PUSH AF
+  PUSH BC
+  PUSH DE
+  PUSH HL
+  PUSH IX
+  PUSH IY
   LD HL, KP_MSG
-  CALL _kputs
+  CALL _kputs ; alters registers
+  ; restore them
+  POP IY
+  POP IX
+  POP HL
+  POP DE
+  POP BC
+  POP AF
   CALL REG_DUMP
 
 KP_LOOP:
@@ -71,6 +85,14 @@ exec_init_jump:
 
 REG_DUMP:
   EXTERN _kputh
+  ; maybe add PC printing?
+
+  LD (TMP_REG1), HL ; temporaly save
+
+  LD HL, 0
+  ADD HL, SP ; get current stack pointer
+  LD (TMP_REG2), HL ; save it in TMP_REG2
+
   ; Save the registers
   PUSH AF
   PUSH BC
@@ -78,6 +100,11 @@ REG_DUMP:
   PUSH HL
   PUSH IX
   PUSH IY
+  
+  LD HL, (TMP_REG2) ; push SP
+  PUSH HL
+
+  LD HL, (TMP_REG1) ; restore HL
 
   ; Push the registers that we want to print
   PUSH IY
@@ -86,36 +113,38 @@ REG_DUMP:
   PUSH DE
   PUSH BC
   PUSH AF
-  LD HL, REG_AF
 
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_BC
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_DE
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_HL
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_IX
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_IY
-  CALL _kputs
-  POP HL
-  CALL _kputh
-  LD HL, REG_SP
-  CALL _kputs
-  LD HL, 0
-  ADD HL, SP ; Get current stack pointer
-  CALL _kputh ; Print the stack pointer
+
+  LD HL, REGISTERS ; message
+  LD DE, 5 ; size of each register message(including null)
+  LD C, 7 ; number of registers to print
+
+  REG_DUMP_LOOP:
+    ; save regs
+    POP IY ; IY = register value from stack
+
+    PUSH BC
+    PUSH DE
+    PUSH HL
+
+    CALL _kputs ; fastcall, so HL is the arg
+    PUSH IY ; theres no ld hl, iy instruction, need to do this simple "trick"
+    POP HL ; HL = register value
+    CALL _kputh ; also fastcall
+
+    ; restore regs
+    POP HL
+    POP DE
+    POP BC
+
+    ; decrement and advance msg pointer
+    DEC C
+    JR Z, REG_DUMP_END
+    ADD HL, DE ; next register message
+    JR REG_DUMP_LOOP
+
+  REG_DUMP_END:
+
   ; Restore the registers
   POP IY
   POP IX
@@ -158,17 +187,8 @@ INCLUDE "kernel/kernel.inc"
 
 STACKTRACE_MSG:
   db "Stacktrace: ", 0
-REG_AF:
-  db " AF: ", 0
-REG_BC:
-  db " BC: ", 0
-REG_DE:
-  db " DE: ", 0
-REG_HL:
-  db " HL: ", 0
-REG_IX:
-  db " IX: ", 0
-REG_IY:
-  db " IY: ", 0
-REG_SP:
-  db " SP: ", 0
+
+
+; much better now
+REGISTERS:
+  db " AF:", 0, " BC:", 0, " DE:", 0, " HL:", 0, " IX:", 0, " IY:", 0, " SP:", 0
