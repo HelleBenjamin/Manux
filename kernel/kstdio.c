@@ -46,6 +46,7 @@ int kgetslen(char *s, int len) {
   for (i = 0; i < len; ++i) {
     s[i] = kgetchar();
     if (s[i] == '\r' || s[i] == '\n') { /* newline */
+      kputs("\n\r");
       break;
     }
     if (s[i] == '\b' || s[i] == 0x7f) { /* backspace */

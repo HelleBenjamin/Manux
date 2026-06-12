@@ -87,7 +87,6 @@ int main(void) {
     memset(command, 0, 128);
     putstr("$ ");
     read(STDIN_FILENO, &command, 128); // Use fixed length read instead of gets. gets may result in buffer overflow
-    newline();
 
     if (command[0] == '\0') { /* empty command? */
       continue;

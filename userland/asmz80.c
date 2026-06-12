@@ -213,7 +213,7 @@ int line_codegen(char *line) {
   /* tokenize line with strtok */
   /* operation*/
   char *token = strtok(line, " \t");
-  if (!token) return -1;
+  if (!token) return 0; /* ignore empty lines */
   strncpy(op, token, sizeof(op) - 1);
   op[sizeof(op) - 1] = '\0';
   /* check if label, ends with colon*/

@@ -1,13 +1,14 @@
-  ld c, 10 ; counter, loop 10 times
+; This program should print 0123...9
+init:
+ ld c, 10 ; counter
+ ld a, 0x30 ; '0'
 loop:
-  dec c ; loop:
-  xor a ; check if zero
-  cp c
-  jr z, end ; if zero jump to end
-  ld a, 0x30 ; char '0'
-  rst 8 ; print it
-  jr loop ; jump back to loop
+ rst 0x08 ; stdout
+ inc a
+ dec c
+ jr z, end
+ jr loop
 end:
-  ld a, 0 ; end, sys_exit
-  ld hl, 0
-  rst 0x20 ; syscall
+ ld a, 0 ; exit syscall
+ ld hl, 0
+ rst 0x20
