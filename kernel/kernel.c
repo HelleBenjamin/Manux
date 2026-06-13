@@ -10,6 +10,7 @@
 uint8_t* kernel_flags = (uint8_t*)KERNEL_FLAGS;
 
 int kernel_main(void) {
+  /* initialization order: 1.tty, 2.fs, 3.fd */
   tty_init();
   __asm__("ei\nim 1\n"); /* enable interrupts and set the interrupt mode to 1 */
   kputs("Manux Kernel\n");
@@ -87,12 +88,8 @@ int exec_init(char *fname) __z88dk_fastcall {
   }
 
   /* get the size of the shell file */
-  //fd_entry *entry = &fd_table[fd];
-  //int size = entry->file->size;
   file *shellfile = find_file(fname);
   int size = shellfile->size;
-
-  //mfs_close(fd);
 
   __asm__ ( /* assembly function contains the jump*/
     "extern exec_init_jump\n"

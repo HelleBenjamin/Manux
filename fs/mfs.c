@@ -104,26 +104,27 @@ void write_changes(void) {
 
 /* Returns the sector of a free block*/
 uint16_t find_free_block(void) {
+  /* slow ass function, don't use this as an example */
   char tempbuf2[512];
   memset(tempbuf2, 0, 512);
-  for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) {
+  for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) { /* loop through all blocks */
     disk_read(tempbuf2, i, 1);
-    if (tempbuf2[0] == 0) {
+    if (tempbuf2[0] == 0) { /* found free block */
       int is_allocated = 0;
-      for (uint16_t j = 0; j < fs->filecount; ++j) {
+      for (uint16_t j = 0; j < fs->filecount; ++j) { /* check if any created file (no written data) is using this block*/
         uint16_t next_block = fs->files[j].block;
-        while (next_block != 0 && next_block < FS_MAX_SECTORS) {
-          if (next_block == i) {
+        while (next_block != 0 && next_block < FS_MAX_SECTORS) { /* and again we loop */
+          if (next_block == i) { /* the block is allocated to another file*/
             is_allocated = 1;
-            break;
+            break; /* exit loop*/
           }
           disk_read(tempbuf, next_block, 1);
           next_block = *(uint16_t*)(tempbuf + 1);
         }
-        if (is_allocated) break;
+        if (is_allocated) break; /* no free block fouund*/
       }
       if (!is_allocated) {
-        return i;
+        return i; /* return the free block*/
       }
     }
   }
@@ -158,7 +159,7 @@ uint8_t get_file_index(char *fname) __z88dk_fastcall {
 }
 
 int load_executable(char *fname, uint16_t addr) {
-  /* load a file to fixed address 0x4020, mainly used for executables*/
+  /* load a file and execute it, mainly for executables*/
   int i = get_file_index(fname);
   if (i == 0xFF) return -1;
 
@@ -166,11 +167,11 @@ int load_executable(char *fname, uint16_t addr) {
   uint16_t bytes_in_block = 0;
   uint16_t sector = fs->files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
 
-  uint16_t offset = 0x0000; /* Space for PIH, kernel creates the PIH */
+  uint16_t offset = 0x0000;
   uint8_t* dest = (uint8_t*)addr;
 
-  while (remaining != 0 && sector != 0 && sector < FS_MAX_SECTORS) {
-    bytes_in_block = (remaining > BLOCK_SIZE-4) ? (BLOCK_SIZE-4) : remaining;
+  while (remaining != 0 && sector != 0 && sector < FS_MAX_SECTORS) { /* read file until remaining is 0*/
+    bytes_in_block = (remaining > BLOCK_SIZE-4) ? (BLOCK_SIZE-4) : remaining; /* how many bytes to read */
     disk_read(tempbuf, sector, 1);
 
     memcpy((uint8_t*)dest+offset, tempbuf+4, bytes_in_block);
@@ -187,7 +188,7 @@ uint16_t get_file_size(char *fname) __z88dk_fastcall {
   file* tempfile;
   tempfile = find_file(fname);
   if (tempfile == NULL) return -1;
-  return tempfile->size;
+  return tempfile->size; /* size in bytes*/
 }
 
 int mfs_open(char *fname, int flags) {
@@ -200,7 +201,7 @@ int mfs_open(char *fname, int flags) {
       return -1; /* No free blocks or block allocation failed */
     }
 
-    uint8_t index = 0;
+    uint8_t index = 0; /* file index*/
     /* find free nameslot*/
     for (index = 0; index < MAX_FILES; ++index) {
       if (fs->files[index].used == 0) break;
@@ -256,7 +257,7 @@ int mfs_open(char *fname, int flags) {
   entry.block_offset = 0;
   entry.prev_block = 0;
 
-  return fd_create(&entry); /* return FD, */
+  return fd_create(&entry); /* return FD, -1 on error*/
 }
 
 int mfs_close(int fd) __z88dk_fastcall {
@@ -276,7 +277,7 @@ int mfs_close(int fd) __z88dk_fastcall {
 }
 
 int mfs_read(int fd, char *buf, uint16_t count) {
-  /* read from memory */
+  /* read from disk */
   fd_entry *entry = fd_get(fd);
   if (entry == NULL) {
     return -1;
@@ -321,7 +322,7 @@ int mfs_read(int fd, char *buf, uint16_t count) {
 }
 
 int mfs_write(int fd, char *buf, uint16_t count) {
-  /* write to memory */
+  /* write to disk */
   fd_entry *entry = fd_get(fd);
   if (entry == NULL) {
     return -1;
@@ -423,6 +424,7 @@ int mfs_seek(int fd, uint16_t pos, int whence) {
 }
 
 int dump_fs(void) {
+  /* debugging only */
   kputs("Filesystem debug info:\n");
   kputs("Checksum: "); kputh(fs->checksum); kputs("\n");
   kputs("Formatted: "); kputh(fs->formatted); kputs("\n");
@@ -456,11 +458,6 @@ int mfs_delete(char *fname) __z88dk_fastcall {
 
   /* delete the file from the filetable, zero it */
   memset(tempfile, 0, sizeof(file));
-  /*tempfile->used = 0;
-  tempfile->flags = 0;
-  tempfile->size = 0;
-  tempfile->block = 0;
-  tempfile->block_size = 0;*/
 
   --fs->filecount;
 
@@ -483,7 +480,7 @@ int mfs_list(char *buf) __z88dk_fastcall {
 int mfs_filesize(char *fname) __z88dk_fastcall {
   file* tempfile = find_file(fname);
   if (tempfile == NULL) return -1; /* file doesn't exist */
-  return tempfile->size;
+  return tempfile->size; /* size in bytes */
 }
 
 int disk_read(char *buffer, uint16_t sector, uint8_t num_sectors) __naked {

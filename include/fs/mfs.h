@@ -16,6 +16,8 @@
 #define FS_BUF        0xF000 /* Single sector sized buffer */
 #define FS_ROOT_MADDR 0xF200 /* Start of root directory in RAM */
 
+/* in the future expand that root directory takes 2-4 blocks, allowing for more files*/
+/* also add bitmap for block allocation, this is way faster than looking through all blocks */
 #define FS_ROOT_SECTOR  0 /* Start of Root directory */
 #define FS_BLOCK_SECTOR (FS_ROOT_SECTOR+1) /* Start of File blocks */
 #define FS_MAX_SECTORS  2879 /* Max sectors that the FS can use - root sector */

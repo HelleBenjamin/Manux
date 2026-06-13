@@ -5,6 +5,7 @@
 #include <driver/tty.h>
 #include <kernel/kernel.h>
 
+/*not overridable, fix*/
 __sfr __at 0x81 TTY_DATA;
 __sfr __at 0x80 TTY_CONTROL;
 
@@ -29,12 +30,13 @@ int tty_init(void) {
 }
 
 void z80_rst_38h(void) __critical __interrupt(0x38) {
+  /* put character to buffer, ISR*/
   if (*tty_buffer_count < TTY_BUF_SIZE) {
-    tty_buffer[*tty_buffer_head] = TTY_DATA;
-    *tty_buffer_head = (*tty_buffer_head + 1) % TTY_BUF_SIZE;
-    *tty_buffer_count = *tty_buffer_count + 1;
+    tty_buffer[*tty_buffer_head] = TTY_DATA; /* read from port*/
+    *tty_buffer_head = (*tty_buffer_head + 1) % TTY_BUF_SIZE; /* circular buffer, wraps around*/
+    *tty_buffer_count = *tty_buffer_count + 1; /* increment count, might use (*tty_buffer_count)++, but this is less error prone*/
   }
-}
+}§
 
 void z80_rst_08h(void) __naked {
   __asm__ ( /* put character in a*/
@@ -42,14 +44,15 @@ void z80_rst_08h(void) __naked {
     "ei\n"
     "reti\n"
   );
+  /* maybe a good idea to read if ACIA is done transmitting another character*/
 }
 
 void z80_rst_10h(void) __interrupt(0x10) {
-  volatile char character;
-  while(*tty_buffer_count == 0);
+  volatile char character; /* must be volatile, otherwise wont work, some compiler black magic behind this?*/
+  while(*tty_buffer_count == 0); /* wait for character */
   character = tty_buffer[*tty_buffer_tail];
   *tty_buffer_tail = (*tty_buffer_tail + 1) % TTY_BUF_SIZE;
-  *tty_buffer_count = *tty_buffer_count - 1;
+  *tty_buffer_count = *tty_buffer_count - 1; /* decrement count*/
   TTY_DATA = character; /* echo*/
   __asm__ (
     "ld a, (ix-2)\n" /* character in A*/
@@ -67,8 +70,8 @@ void z80_rst_10h(void) __interrupt(0x10) {
 }
 
 int tty_getchar(void) {
-  char character;
-  while(*tty_buffer_count == 0);
+  volatile char character; /* same reason as above*/
+  while(*tty_buffer_count == 0); /* wait*/
   character = tty_buffer[*tty_buffer_tail];
   *tty_buffer_tail = (*tty_buffer_tail + 1) % TTY_BUF_SIZE;
   *tty_buffer_count = *tty_buffer_count - 1;
@@ -76,6 +79,6 @@ int tty_getchar(void) {
 }
 
 int tty_putchar(char c) __z88dk_fastcall {
-  TTY_DATA = c;
+  TTY_DATA = c; /* write directly to port*/
   return 0;
 }

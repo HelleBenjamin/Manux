@@ -151,7 +151,7 @@ INVALID_SYSCALL:
   LD SP, (SAVED_SP)
   RET
 
-GET_HL_SYSCALL:
+GET_HL_SYSCALL: ; Get temporaly saved HL value
   LD HL, (TMP_REG1)
   RET
 
@@ -209,7 +209,7 @@ SYSCALL_END_NO_RET: ; No return value
 
   RET
 
-ECHO_CHAR:
+ECHO_CHAR: ; probably not so useful function
   PUSH HL
   LD HL, KERNEL_FLAGS
   BIT 0, (HL) ; Check if echo is enabled
