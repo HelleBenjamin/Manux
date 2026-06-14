@@ -237,7 +237,7 @@ int main(int argc, char **argv)
     next_token();
 
     result = parse_expr(); /* get result */
-    printf("\n= %d\n", result); /* and print it */
+    printf("= %d", result); /* and print it */
   }
 
   return 0;
