@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 
 /* version 1.3 */
 /* notice: int is always signed 16 bit*/
@@ -58,12 +59,8 @@ int ipow(int x, int y) {
   return r; /* x^y */
 }
 
-void putstr(char *s) { write(1, s, strlen(s)); }
-
 void error(char *s) {
-  write(2, "error: ", 7);
-  write(2, s, strlen(s));
-  write(2, "\n", 1);
+  printf("error: %s\n", s);
 }
 
 void next_token(void) 
@@ -225,27 +222,12 @@ int parse_expr(void)
   return val;
 }
 
-void putud(unsigned int n) {
-  if (n >= 10) putud(n / 10);
-  char c = '0' + (n % 10);
-  write(1, &c, 1);
-}
-
-void putd(int n) {
-  if (n < 0) {
-    write(1, "-", 1);
-    putd((unsigned int)-n);
-  } else {
-    putud((unsigned int)n);
-  }
-}
-
 int main(int argc, char **argv) 
 {
-  putstr("ecalc 1.3\nType 'q' to exit");
+  printf("ecalc 1.3\nType 'q' to exit");
   char line[0xFF];
   while (1) { /* main loop */
-    putstr("\n> ");
+    printf("\n> ");
     read(0, line, sizeof(line));
 
     /* exit*/
@@ -255,8 +237,7 @@ int main(int argc, char **argv)
     next_token();
 
     result = parse_expr(); /* get result */
-    putstr("\n= "); /* and print it */
-    putd(result);
+    printf("\n= %d\n", result); /* and print it */
   }
 
   return 0;

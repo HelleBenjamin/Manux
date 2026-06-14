@@ -94,7 +94,7 @@ disk: # 1.44mb image, floppy as reference
 	dd if=/dev/zero of=disk.img bs=512 count=2880
 
 # userland utilities eg. shell
-CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy -compiler=sdcc --max-allocs-per-node100000 -Wall -I$(ROOTDIR)/include -L$(BUILDDIR) -llibposix -startup=-1 -pragma-define:CRT_INITIALIZE_BSS=0 -pragma-define:CRT_MODEL=0x1 -pragma-define:CRT_ORG_BSS=-1 -pragma-define:REGISTER_SP=-1 -pragma-define:CRT_ORG_DATA=-1 -m -create-app
+CCU_FLAGS := +z80 -SO3 -vn -clib=sdcc_iy -compiler=sdcc --max-allocs-per-node100000 -Wall -I$(ROOTDIR)/include -L$(BUILDDIR) -llibposix -startup=-1 -pragma-include:pragma.inc -m -create-app
 userland: mfs-util posix_lib disk
 	$(MAKE) -C userland AS=$(AS) CC=$(CC) AS_FLAGS="$(AS_FLAGS)" CCU_FLAGS="$(CCU_FLAGS)" ROOTDIR=$(ROOTDIR) BUILDDIR=$(BUILDDIR)
 

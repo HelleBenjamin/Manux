@@ -4,21 +4,26 @@ SOURCES := ecalc.c asmz80.c edit.c
 
 # shell, don't touch unless replacing it with another one
 SHELL_SRC := shell.c
-OBJECTS := $(SOURCES:%.c=$(ROOTDIR)/build/%.o)
-BINARIES := $(SOURCES:%.c=$(ROOTDIR)/build/%.bin)
+OBJECTS := $(SOURCES:%.c=$(ROOTDIR)/build/userland/%.o)
+BINARIES := $(SOURCES:%.c=$(ROOTDIR)/build/userland/%.bin)
+
+# stdio driver
+STDIO_DRV = \
+	@stdio/terminal/term_01_input_char.lst \
+	@stdio/terminal/term_01_output_char.lst
 
 # export from the main makefile
 export AS CC AS_FLAGS CCU_FLAGS BUILDDIR ROOTDIR
 
 all: build $(OBJECTS)
 
-$(ROOTDIR)/build/%.o: %.c
-	$(CC)	$(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x4100 -pragma-define:CRT_ENABLE_COMMANDLINE=2 $< -o $@
+$(ROOTDIR)/build/userland/%.o: %.c
+	$(CC)	$(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x4100 -pragma-define:CRT_ENABLE_COMMANDLINE=2 -pragma-define:CRT_INCLUDE_DRIVER_INSTANTIATION=1 $< $(STDIO_DRV) -o $@
 
 # shell is a special case, it needs to be compiled with a different address
 build/SHELL.BIN: $(SHELL_SRC)
-	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3000 $(SHELL_SRC) -o $(BUILDDIR)/SHELL.bin
-	mv $(BUILDDIR)/SHELL.rom $(BUILDDIR)/SHELL.BIN
+	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3000 $(SHELL_SRC) -o $(BUILDDIR)/userland/SHELL.bin
+	mv $(BUILDDIR)/userland/SHELL.rom $(BUILDDIR)/SHELL.BIN
 
 all: build $(OBJECTS) build/SHELL.BIN final_image
 
@@ -32,7 +37,7 @@ final_image: all
 	
 
 build:
-	mkdir -p $(ROOTDIR)/build
+	mkdir -p $(ROOTDIR)/build $(ROOTDIR)/build/userland
 
 
 .PHONY: all
