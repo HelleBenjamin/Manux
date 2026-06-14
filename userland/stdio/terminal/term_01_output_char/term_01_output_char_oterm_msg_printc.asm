@@ -2,6 +2,7 @@ SECTION code_driver
 SECTION code_driver_terminal_output
 
 PUBLIC term_01_output_char_oterm_msg_printc
+PUBLIC console_01_output_char_proc_linefeed
 
 term_01_output_char_oterm_msg_printc:
 
@@ -19,3 +20,14 @@ term_01_output_char_oterm_msg_printc:
     rst 0x08
     ret
 
+console_01_output_char_proc_linefeed:
+    ; custom newline handler, this prints the new position
+
+    push af
+    ld a, 13 ; '\r'
+    rst 0x08
+
+    ld a, 10 ; '\n'
+    rst 0x08
+    pop af
+    ret
