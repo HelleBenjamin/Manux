@@ -121,20 +121,11 @@ int reg8(char *name) {
 }
 
 int reg16(char *name) {
-  /* for add/sub, etc..*/
+  /* for add/sub, push/pop, etc..*/
   if (strcmp(name, "BC") == 0) return 0;
   if (strcmp(name, "DE") == 0) return 1;
   if (strcmp(name, "HL") == 0) return 2;
-  if (strcmp(name, "SP") == 0) return 3;
-  return -1;
-}
-
-int reg16af(char *name) {
-  /* return register "index", used for push/pop*/
-  if (strcmp(name, "BC") == 0) return 0;
-  if (strcmp(name, "DE") == 0) return 1;
-  if (strcmp(name, "HL") == 0) return 2;
-  if (strcmp(name, "AF") == 0) return 3; /* instead of SP*/
+  if (strcmp(name, "SP") == 0 || strcmp(name, "AF") == 0) return 3; /* note: af is invalid in some operations, such as addition, there's no "add hl, af"*/
   return -1;
 }
 
@@ -470,14 +461,14 @@ int line_codegen(char *line) {
 
   /* push/pop*/
   if (strcmp(op, "PUSH") == 0) {
-    rr = reg16af(arg1);
+    rr = reg16(arg1);
     if (rr != -1) {
       emitb(0xC5 + (rr << 4));
       return 0;
     }
   }
   if (strcmp(op, "POP") == 0) {
-    rr = reg16af(arg1);
+    rr = reg16(arg1);
     if (rr != -1) {
       emitb(0xC1 + (rr << 4));
       return 0;
