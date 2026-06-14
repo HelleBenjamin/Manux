@@ -4,7 +4,7 @@
    ;# fd=0, stdin
 
    include(`stdio/terminal/term_01_input_char.m4')
-   m4_term_01_input_char(_stdin, __i_fcntl_fdstruct_1, 0x01b0, 64)
+   m4_term_01_input_char(_stdin, __i_fcntl_fdstruct_1, 0x0130, 64)
 
    ;# m4_term_01_input_char(file, connected output terminal, flags, edit buffer size)
    ;#   flags:
@@ -20,7 +20,7 @@
    ;# fd=1, stdout
 
    include(`stdio/terminal/term_01_output_char.m4')dnl
-   m4_term_01_output_char(_stdout, 0x0010, 0, 0, 0, 80, 0, 25, 0)dnl
+   m4_term_01_output_char(_stdout, 0x0018, 0, 0, 0, 80, 0, 25, 0)dnl
 
    ;# m4_term_01_output_char(file, flags, cursor.x, cursor.y, window.x, window.width, window.y, window.height, scroll limit)
    ;#   flags:

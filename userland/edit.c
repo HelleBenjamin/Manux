@@ -14,6 +14,7 @@
 #endif
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #define MAX_LINE_LEN 96
 #define MAX_LINES 150
@@ -23,16 +24,13 @@ int num_lines = 0;
 
 int filefd = -1;
 
-void putstr(char *str) {
-  write(STDOUT_FILENO, str, strlen(str));
-}
-
 /* Lots of TODOs*/
 
 void append(void) {
   char buf[MAX_LINE_LEN];
   while (1) {
-    read(0, buf, MAX_LINE_LEN);
+    scanf("%95s", buf);
+    // read(0, buf, MAX_LINE_LEN);
 
     if (strcmp(buf, ".") == 0) break;
     strcpy(lines[num_lines++], buf);
@@ -45,11 +43,11 @@ int main(int argc, char *argv[]) {
     filefd = open(argv[1], O_RDWR | O_CREAT, 0644);
   }
 
-  putstr("Edit - text editor\n");
+  printf("Edit - text editor\n");
 
   char cmd[128];
   while(1) {
-    putstr("> ");
+    printf("> ");
     read(0, cmd, 128); /* read command*/
 
     if(strcmp(cmd, "q") == 0) {

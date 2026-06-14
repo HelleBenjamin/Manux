@@ -88,12 +88,8 @@ ENDIF
 
 __Start:
 
-   include "../crt_start_di.inc"
-   include "../crt_save_sp.inc"
-
 __Restart:
 
-   include "../crt_init_sp.inc"
 
    ; command line
 
@@ -105,7 +101,7 @@ ENDIF
 
 __Restart_2:
 
-IF __crt_enable_commandline >= 1
+IF __crt_enable_commandline == 2
 
     ; Manux specific 
     ; hl = argv pointer

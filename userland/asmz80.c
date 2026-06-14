@@ -29,6 +29,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 int outputfd; /* output file descriptor */
 uint16_t pc = 0x4100; /* program counter, keeps track of current address, defaults to 0x4100 */
@@ -41,19 +42,6 @@ struct label {
 
 struct label labels[16]; /* array of label structures, size can be adjusted */
 int num_labels = 0; /* number of labels found */
-
-/* stdout wrappers*/
-void putchr(char c) {
-  write(STDOUT_FILENO, &c, 1);
-}
-
-void putstr(char *str) {
-  write(STDOUT_FILENO, str, strlen(str));
-}
-
-void newline(void) {
-  putchr('\n');
-}
 
 int get_label_addr(char *name) {
   if (!pass) return -1; /* pass not completed*/
@@ -221,7 +209,7 @@ int line_codegen(char *line) {
     op[strlen(op) - 1] = '\0';
     if (!pass) {
       if (num_labels >= (int)(sizeof(labels)/sizeof(labels[0]))) {
-        putstr("Too many labels\n");
+        printf("Too many labels\n");
         return -1;
       }
       strncpy(labels[num_labels].name, op, sizeof(labels[num_labels].name) - 1);
@@ -631,7 +619,7 @@ int line_codegen(char *line) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    putstr("Usage: ./asmz80 <input.asm> <output.bin> <additional_args>\n");
+    printf("Usage: ./asmz80 <input.asm> <output.bin> <additional_args>\n");
     return -1;
   }
 
@@ -650,18 +638,15 @@ int main(int argc, char *argv[]) {
   }
 
   /* takes the input and output file names */
-  putstr("asmz80 - z80 assembler\n"); /* or sasmz80 shitty z80 assembler :)*/
+  printf("asmz80 - z80 assembler\n"); /* or sasmz80 shitty z80 assembler :)*/
 
   /* random */
-  putstr(argv[1]);
-  putstr(" -> ");
-  putstr(argv[2]);
-  putstr("\n");
+  printf("%s -> %s\n", argv[1], argv[2]);
 
   /* open the input file */
   int infd = open(argv[1], O_RDONLY, 0);
   if (infd == -1) {
-    putstr("Couldn't open input file\n");
+    printf("Couldn't open input file\n");
     return -1;
   }
 
@@ -671,7 +656,7 @@ int main(int argc, char *argv[]) {
   /* open the output file */
   outputfd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (outputfd == -1) {
-    putstr("Couldn't open output file\n");
+    printf("Couldn't open output file\n");
     return -1;
   }
 
@@ -703,16 +688,14 @@ int main(int argc, char *argv[]) {
       }
 
       if (code < 0) { /* error reading it*/
-        putstr("Error reading input file\n");
+        printf("Error reading input file\n");
         break;
       }
 
       line[i] = '\0'; /* null terminate */
 
       if (line_codegen(line) < 0) { /* assemble the line*/
-        putstr("Error assembling line:");
-        putstr(line);
-        putstr("\n");
+        printf("Error assembling line: %s\n", line);
         break;
       }
       line_number++;
