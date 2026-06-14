@@ -1,6 +1,6 @@
 Manux
 =====
-Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasksing, ROM based kernel, and disk based userland programs. Currently there aren't much of programs, but it's going to be expanded in the future.
+Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasksing, features ROM based kernel and disk based userland programs. It aims partial POSIX support.
 
 Manux runs on a custom Z80 emulator called bemu80(https://github.com/HelleBenjamin/bemu80).
 The emulator is included in the repository and can be built using `make bemu80`.
@@ -22,6 +22,11 @@ The kernel is currently under development.
 Most of the features are working as intended, but there are still some bugs and missing features.
 Latest stable version: v0.3.0
 
+History
+=======
+I started this project back in April 9th, 2025 after I figured out how to upload code as payload to a Z80 machine(http://searle.x10host.com/z80/SimpleZ80.html) that runs BASIC. That's why you see basicloader.c in older versions, fun fact or not. 
+Initially I released the repository as private, but I made a public repository on May 1st, marking the "first" release. After that, I continued development, and kept a small break(less than a year), and now I'm back working on it again.
+
 System calls
 ============
 Programs can communicate with the kernel using system calls. The kernel preserves all general purpose registers, so the programmer shouldn't have to worry about them.
@@ -38,7 +43,9 @@ See `doc/syscalls.md` for more information
 
 POSIX support
 =============
-Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, so it may not work with some programs.
+Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, some programs might break or not work at all.
+Stdio(printf, scanf, etc..) isn't working yet, use read/write from unistd instead. 
+The current implementation relies on z88dk's newlib(also mixed with classic lib, little bit messy), so full custom target is needed. I haven't implemented the full target yet, but I've ported CRT0 and unistd/other POSIX-like functions.
 See `include/sys/` folder for currently supported functions.
 
 Minimum system requirements
@@ -73,11 +80,11 @@ Currently stdio is not supported, so use read/write from unistd instead.
 Userland programs are located in `userland/` directory. See its README for more information.
 
 The OS comes with a few programs included in the `userland/` directory.
-There are `ecalc`(a simple calculator) and `asmz80`(a simple assembler, buggy).
+There are `ecalc`(a simple calculator) and `asmz80`(a simple assembler, WIP).
 
 Pre-requisites
 ==============
-- z88dk 2.4(or newer)
+- z88dk 2.4
 - make
 - kconfig-frontends-nox(for configuration)
 - linux or other unix-like platform
@@ -92,24 +99,26 @@ Here's the steps to build Manux:
 1. `git clone https://github.com/HelleBenjamin/Manux.git`
 2. `cd Manux`
 3. `kconfig-mconf Kconfig` (optional)
-4. `make kernel`, this build only the kernel
-5. `make userland`, this builds the userland programs and the disk image
-6. `make bemu80`, this builds bemu80
-7. `make`, this builds all, kernel, userland, etc..
-8. `make emulate`, run the OS in bemu80
+4. `make`, builds the kernel, userland, disk image, and bemu80
+
+Here's some other make targets:
+- `make kernel` builds only the kernel
+- `make userland` builds the userland programs and the disk image
+- `make bemu80` builds bemu80
+- `make emulate` runs the OS in bemu80
 
 `make testprogram` adds file `test.asm`, useful for testing the assembler
 
-Note that compilation can take a while due to SDCC's optimizer. 
+Note that compilation can take a while due to SDCC's optimizer. Especially with larger files, such as mfs.c and asmz80.c.
 Reduce `--max-allocs-per-node100000` to 10000 if you want to build faster at the cost of code size and speed.
 
-You can always run `make clean` to clean the build directory
+You can always run `make clean` to clean the build directory and remove all built stuff.
 
 Contributing
 ============
 Pull requests are welcome! Feel free to add new features or fix bugs.
 Note that clearly vibe coded slop code isn't accepted.
-You can use AI if you understand it well enough.
+You can use AI if you understand it well enough, but I encourage you to write your own code(you learn that way).
 
 License
 =======
