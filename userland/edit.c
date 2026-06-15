@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_LINE_LEN 96
 #define MAX_LINES 150
@@ -46,6 +47,21 @@ void print_lines(void) {
   for (int i = 0; i < num_lines; i++) {
     printf("%d\t%s\n", i+1, lines[i]);
   }
+}
+
+void edit_line(int line) {
+  /* check if valid line number*/
+  if (line < 1 || line > MAX_LINES) {
+    printf("Invalid line number\n");
+    return;
+  }
+
+  char buf[MAX_LINE_LEN];
+
+  printf("Line %d\nOld: %s\nNew: ", line, lines[line-1]);
+  read(0, buf, MAX_LINE_LEN); /* read new line*/
+
+  strcpy(lines[line-1], buf); /* copy it*/
 }
 
 void load_file(void) {
@@ -115,6 +131,12 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(cmd, "p") == 0) {
       /* print lines*/
       print_lines();
+    } else if (cmd[0] == 'e') {
+      /* edit line */
+      int line_num = atoi(&cmd[1]);
+      edit_line(line_num);
+    } else {
+      printf("Invalid command\n");
     }
   }
 

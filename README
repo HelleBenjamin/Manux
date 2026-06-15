@@ -44,7 +44,7 @@ See `doc/syscalls.md` for more information
 POSIX support
 =============
 Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, some programs might break or not work at all.
-Stdio works now, printf/scanf supports opetations "%c, %s, %d, %x", file operations aren't tested/implemented yet. Note that stdio add greatly to the code size, around 2-6KB depending on functions used.
+Stdio works now: printf/scanf are tested. File operations aren't tested/implemented yet. Note that stdio add greatly to the code size, around 2-6KB depending on functions used.
 The current implementation relies on z88dk's newlib(also mixed with classic lib, little bit messy), so full custom target is needed. I haven't implemented the full target yet, but I've ported CRT0 and unistd/other POSIX-like functions.
 See `include/sys/` folder for currently supported functions.
 
