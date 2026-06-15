@@ -18,6 +18,10 @@
 
 2026-06-15:
   Implemented more instructions, bug fixes, renamed to "m80asm"
+
+2026-06-16:
+  Added index instructions
+
 */
 
 #ifdef __linux
@@ -132,6 +136,14 @@ int reg16(char *name) {
   return -1;
 }
 
+int index_reg(char *name) {
+  /* for index register operations*/
+  /* returns prefix*/
+  if (strcmp(name, "IX") == 0) return 0xDD;
+  if (strcmp(name, "IY") == 0) return 0xFD;
+  return -1;
+}
+
 int jpcond(char *name) {
   /* jump condition*/
   if (strcmp(name, "NZ") == 0) return 0;
@@ -163,6 +175,38 @@ int mem_addr(char *addr) {
   return -1; /* invalid memory address */
 }
 
+int index_addr(char *str, int *prefix, int *disp) {
+  char buf[32];
+  int len = strlen(str);
+
+  /* check if valid*/
+  if (len < 5) return -1;
+  if (str[0] != '(' || str[len - 1] != ')') return -1;
+
+  /* copy the inxed register*/
+  strncpy(buf, str+1, len - 2);
+  buf[len-2] = 0; /* null*/
+
+  /* now set the prefix according to the register*/
+  if (strncmp(buf, "IX", 2) == 0) {
+    *prefix = 0xDD;
+  } else if (strncmp(buf, "IY", 2) == 0) {
+    *prefix = 0xFD;
+  } else {
+    return -1; /* invalid index reg*/
+  }
+
+  if (buf[2] != '+' && buf[2] != '-') return -1; /* only +- offsets are accepted, no modrm like stuff*/
+
+  /* set the displacement*/
+  *disp = strtol(buf+2, NULL, 0);
+
+  /* check if in bounds*/
+  if (*disp < -128 || *disp > 127) return -1;
+
+  return 0;
+}
+
 /* single pass code generation, needs to be dual pass to support labels */
 int line_codegen(char *line) {
   /* global variables, makes debugging easier */
@@ -173,8 +217,9 @@ int line_codegen(char *line) {
   int rr; /* 16-bit register */
   int cond; /* condition, for jumps, etc.*/
   int addr; /* absolute address */
-  int imm;
+  int imm; /* immediate value*/
   int label_addr; /* resolved label address, second pass only */
+  int prefix, disp; /* index stuff*/
 
   /* remove comments */
   if (line[0] == ';') {
@@ -208,7 +253,7 @@ int line_codegen(char *line) {
       }
       strncpy(labels[num_labels].name, op, sizeof(labels[num_labels].name) - 1);
       labels[num_labels].name[sizeof(labels[num_labels].name) - 1] = '\0';
-      labels[num_labels].address = pc;
+      labels[num_labels].address = pc; /* current code position*/
       num_labels++;
       return 0;
     }
@@ -255,6 +300,36 @@ int line_codegen(char *line) {
     /* 8-bit operations first */
     reg1 = reg8(arg1);
     reg2 = reg8(arg2);
+
+    /* index address*/
+    /* it needs to be first because of the design*/
+    if (index_addr(arg2, &prefix, &disp) == 0) {
+      /* LD r, (index+disp)*/
+      if (reg1 != -1 && reg1 != 6) {
+        emitb(prefix); /* 0xDD or 0xFD*/
+        emitb(0x46+(reg1 << 3));
+        emitb((uint8_t)disp);
+        return 0;
+      }
+    }
+
+    if (index_addr(arg1, &prefix, &disp) == 0) {
+      /* LD (index+disp), r*/
+      if (reg2 != -1 && reg2 != 6) {
+        emitb(prefix);
+        emitb(0x70+(reg2 << 3));
+        emitb((uint8_t)disp);
+        return 0;
+      }
+
+      /* LD (index+disp), n*/
+      imm = strtol(arg2, NULL, 0);
+      emitb(prefix);
+      emitb(0x36);
+      emitb((uint8_t)disp);
+      emitb(imm);
+      return 0;
+    }
 
     /* both are registers */
     if (reg1 != -1 && reg2 != -1) {
@@ -679,8 +754,12 @@ int main(int argc, char *argv[]) {
 
   /* main loop doing the assembly */
   /* read line by line and assemble by it*/
+  /* the assembly is completed in two passes:*/
+  /* 1st pass: collect labels, dummy emits to get pc position*/
+  /* 2nd pass: actual code generation*/
   char line[127];
   for (pass = 0; pass < 2; pass++) {
+    printf("Begin pass %d\n", pass+1);
     pc = basepc; /* reset the program counter */
     /* rewind input file for each pass */
     lseek(infd, 0, SEEK_SET);
@@ -718,6 +797,9 @@ int main(int argc, char *argv[]) {
       line_number++;
     }
   }
+
+  /* print the size, more like a debug function*/
+  printf("Assembled program size %d bytes\n", pc - basepc);
 
   close(infd);
   close(outputfd);
