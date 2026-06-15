@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only
 * Copyright (c) 2026 Benjamin Helle
-* asmz80.c
+* m80asm.c
 * simple z80 assembler
 * can assemble VERY simple programs
 */
@@ -15,6 +15,9 @@
 
 2026-06-11: 
   Added label support, two-pass system, minor bug fixes, added few instructions
+
+2026-06-15:
+  Implemented more instructions, bug fixes, renamed to "m80asm"
 */
 
 #ifdef __linux
@@ -255,7 +258,7 @@ int line_codegen(char *line) {
 
     /* both are registers */
     if (reg1 != -1 && reg2 != -1) {
-      if (reg1 == 6 || reg2 == 6) return -1; /* not possible */
+      if (reg1 == 6 && reg2 == 6) return -1; /* not possible */
       emitb(0x40 + (reg1 << 3) + reg2); /* or reg2 * 8, but shift is more efficient */
       return 0;
     }
@@ -604,13 +607,36 @@ int line_codegen(char *line) {
     }
   }
 
+  if (strcmp(op, "DJNZ") == 0) {
+    int curr_pc = pc;
+    emitb(0x10);
+    return emit_rel(arg1, curr_pc);
+  }
+
+  /* exchange*/
+  if (strcmp(op, "EX") == 0) {
+    
+    if (strcmp(arg1, "AF") == 0 && strcmp(arg2, "AF'") == 0) {
+      emitb(0x08);
+      return 0;
+    }
+    if (strcmp(arg1, "DE") == 0 && strcmp(arg2, "HL") == 0) {
+      emitb(0xEB);
+      return 0;
+    }
+    if (strcmp(arg1, "(SP)") == 0 && strcmp(arg2, "HL") == 0) {
+      emitb(0xE3);
+      return 0;
+    }
+  }
+
   return -1;
 }
 
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    printf("Usage: ./asmz80 <input.asm> <output.bin> <additional_args>\n");
+    printf("Usage: ./m80asm.bin <input.asm> <output.bin> <additional_args>\n");
     return -1;
   }
 
@@ -629,7 +655,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* takes the input and output file names */
-  printf("asmz80 - z80 assembler\n"); /* or sasmz80 shitty z80 assembler :)*/
+  printf("m80asm - Manux Z80 assembler\n");
 
   /* random */
   printf("%s -> %s\n", argv[1], argv[2]);

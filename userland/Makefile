@@ -1,6 +1,6 @@
 
 # programs that will be built and included in the image
-SOURCES := ecalc.c asmz80.c edit.c
+SOURCES := ecalc.c m80asm.c edit.c
 
 # shell, don't touch unless replacing it with another one
 SHELL_SRC := shell.c
