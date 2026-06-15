@@ -304,7 +304,7 @@ int line_codegen(char *line) {
     /* index address*/
     /* it needs to be first because of the design*/
     if (index_addr(arg2, &prefix, &disp) == 0) {
-      /* LD r, (index+disp)*/
+      /* LD r, (IX/IY+disp)*/
       if (reg1 != -1 && reg1 != 6) {
         emitb(prefix); /* 0xDD or 0xFD*/
         emitb(0x46+(reg1 << 3));
@@ -314,7 +314,7 @@ int line_codegen(char *line) {
     }
 
     if (index_addr(arg1, &prefix, &disp) == 0) {
-      /* LD (index+disp), r*/
+      /* LD (IX/IY+disp), r*/
       if (reg2 != -1 && reg2 != 6) {
         emitb(prefix);
         emitb(0x70+(reg2 << 3));
@@ -322,7 +322,7 @@ int line_codegen(char *line) {
         return 0;
       }
 
-      /* LD (index+disp), n*/
+      /* LD (IX/IY+disp), n*/
       imm = strtol(arg2, NULL, 0);
       emitb(prefix);
       emitb(0x36);
@@ -350,10 +350,28 @@ int line_codegen(char *line) {
     /* 16-bit operations */
     rr = reg16(arg1);
 
+    /* LD SP, IX/IY*/
+    prefix = index_reg(arg2);
+    if (strcmp(arg1, "SP") == 0 && prefix != -1) {
+      emitb(prefix);
+      emitb(0xF9);
+      return 0;  
+    }
+
     /* immediate*/
     if (rr != -1) {
       imm = strtol(arg2, NULL, 0);
       emitb(0x01 + (rr << 4));
+      emitw(imm);
+      return 0;
+    }
+
+    /* LD IX/IY, nn*/
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(prefix);
+      emitb(0x21);
       emitw(imm);
       return 0;
     }
@@ -393,6 +411,15 @@ int line_codegen(char *line) {
       return 0;
     }
 
+    prefix = index_reg(arg2);
+    if (prefix != -1) {
+      /* LD (nn), IX/IY*/
+      emitb(prefix);
+      emitb(0x22);
+      emitw((uint16_t)addr);
+      return 0;
+    }
+
     if (strcmp(arg1, "SP") == 0 && strcmp(arg2, "HL") == 0) {
       emitb(0xF9);
       return 0;
@@ -413,6 +440,13 @@ int line_codegen(char *line) {
       emitb(0x03 + (rr << 4));
       return 0;
     }
+
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      emitb(prefix);
+      emitb(0x23);
+      return 0;
+    }
   }
   /* decrement */
   if (strcmp(op, "DEC") == 0) {
@@ -426,6 +460,13 @@ int line_codegen(char *line) {
     rr = reg16(arg1);
     if (rr != -1) {
       emitb(0x0B + (rr << 4));
+      return 0;
+    }
+
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      emitb(prefix);
+      emitb(0x2B);
       return 0;
     }
   }
@@ -451,6 +492,17 @@ int line_codegen(char *line) {
     if (strcmp(arg1, "HL") == 0) {
       rr = reg16(arg2);
       if (rr != -1) {
+        emitb(0x09 + (rr << 4));
+        return 0;
+      }
+    }
+
+    /* index register, IX/IY*/
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      rr = reg16(arg2);
+      if (rr != -1) {
+        emitb(prefix);
         emitb(0x09 + (rr << 4));
         return 0;
       }
@@ -544,11 +596,25 @@ int line_codegen(char *line) {
       emitb(0xC5 + (rr << 4));
       return 0;
     }
+
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      emitb(prefix);
+      emitb(0xE5);
+      return 0;
+    }
   }
   if (strcmp(op, "POP") == 0) {
     rr = reg16(arg1);
     if (rr != -1) {
       emitb(0xC1 + (rr << 4));
+      return 0;
+    }
+
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      emitb(prefix);
+      emitb(0xE1);
       return 0;
     }
   }
