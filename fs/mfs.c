@@ -74,29 +74,6 @@ int mfs_format(void) {
   return 0;
 }
 
-/* Run on shutdow/exit */
-int mfs_exit(void) {
-  /* Save root to disk*/
-  write_changes();
-  return 0;
-}
-
-// debug only
-/*void print_file_info(file *f) __z88dk_fastcall {
-  kputs("File: ");
-  kputs(f->name);
-  kputchar('\n');
-  kputs("Size: ");
-  kputh(f->size);
-  kputchar('\n');
-  kputs("Block size: ");
-  kputh(f->block_size);
-  kputchar('\n');
-  kputs("First Block: ");
-  kputh(f->block);
-  kputchar('\n');
-}*/
-
 void write_changes(void) {
   /* Save root to disk*/
   disk_write((char *)fs, FS_ROOT_SECTOR, 1);
@@ -389,7 +366,6 @@ int mfs_write(int fd, char *buf, uint16_t count) {
 
 int mfs_sync(void) {
   /* save all changes to disk */
-  //save_to_disk(current_file->name);
   disk_write((char *)fs_rootfs, FS_ROOT_SECTOR, 1); /* root block */
   return 0;
 }
