@@ -20,7 +20,7 @@
   Implemented more instructions, bug fixes, renamed to "m80asm"
 
 2026-06-16:
-  Added index instructions
+  Added index instructions, bug fixes(as always), extended label support
 
 */
 
@@ -47,8 +47,9 @@ struct label {
   uint16_t address; /* absolute addr*/
 };
 
-struct label labels[16]; /* array of label structures, size can be adjusted */
+struct label labels[32]; /* array of label structures, size can be adjusted */
 int num_labels = 0; /* number of labels found */
+int current_line = 0;
 
 int get_label_addr(char *name) {
   if (!pass) return -1; /* pass not completed*/
@@ -79,18 +80,12 @@ void emitw(uint16_t w) {
 }
 
 int emit_rel(char *addr, uint16_t base_pc) {
-  /* check if label*/
   int num;
-  int label = get_label_addr(addr);
-  if (label != -1) {
-    num = label;
-  } else { /* not label, immediate value*/
-    if (!pass) { /* placeholder byte during first pass for unresolved label */
-      emitb(0);
-      return 0;
-    }
-    num = strtol(addr, NULL, 0);
+  if (!pass) { /* placeholder byte during first pass for unresolved label */
+    emitb(0);
+    return 0;
   }
+  num = strtol(addr, NULL, 0);
   int offset;
 
   /* if fit in 8-bit signed range */
@@ -168,11 +163,15 @@ int jrcond(char *name) {
 
 int mem_addr(char *addr) {
   /* parses memory address, like (0x30) to number 0x30*/
-  if (addr[0] == '(' && addr[strlen(addr) - 1] == ')') {
-    addr[strlen(addr) - 1] = '\0';
-    return strtol(addr + 1, NULL, 0);
-  }
-  return -1; /* invalid memory address */
+  char buf[20]; /* same size as args*/
+  int len = strlen(addr);
+  if (len < 3) return -1;
+  if (addr[0] != '(' || addr[len-1] != ')') return -1; /* it must contain (), else invalid*/
+
+  strncpy(buf, addr+1, len-2);
+  buf[len-2] = 0;
+
+  return strtol(buf, NULL, 0); /* return address*/
 }
 
 int index_addr(char *str, int *prefix, int *disp) {
@@ -207,7 +206,35 @@ int index_addr(char *str, int *prefix, int *disp) {
   return 0;
 }
 
-/* single pass code generation, needs to be dual pass to support labels */
+/* helpers*/
+int is_label(char *str) {
+  int label_addr = get_label_addr(str);
+  if (label_addr != -1) {
+    /* convert to string integer*/
+    sprintf(str, "%d", label_addr);
+    return 0;
+  }
+  return -1; /* not label */
+}
+
+int is_label_ptr(char *str) {
+  char buf[20];
+  int len = strlen(str);
+  if (len < 3) return -1;
+  if (str[0] != '(' || str[len-1] != ')') return -1;
+
+  strncpy(buf, str+1, len-2);
+  buf[len-2] = 0;
+
+  int label_addr = get_label_addr(buf);
+  if (label_addr != -1) {
+    /* convert to string integer*/
+    sprintf(str, "(%d)", label_addr);
+    return 0;
+  }
+  return -1; /* not label*/
+}
+
 int line_codegen(char *line) {
   /* global variables, makes debugging easier */
   char op[20];
@@ -294,6 +321,17 @@ int line_codegen(char *line) {
   if (strcmp(op, "RRA") == 0) { emitb(0x1F); return 0; }
   if (strcmp(op, "EXX") == 0) { emitb(0xD9); return 0; }
 
+  /* resolve labels, pass 1 only*/
+  if (pass == 1) {
+    /* conver labels automatically to values*/
+    is_label(arg1);
+    is_label(arg2);
+
+    /* if memory address, such as ld hl, (var1)*/
+    is_label_ptr(arg1);
+    is_label_ptr(arg2);
+  }
+
   /* now comes the argument-based operations */
   /* load/store*/
   if (strcmp(op, "LD") == 0) {
@@ -317,7 +355,7 @@ int line_codegen(char *line) {
       /* LD (IX/IY+disp), r*/
       if (reg2 != -1 && reg2 != 6) {
         emitb(prefix);
-        emitb(0x70+(reg2 << 3));
+        emitb(0x70+reg2);
         emitb((uint8_t)disp);
         return 0;
       }
@@ -328,51 +366,6 @@ int line_codegen(char *line) {
       emitb(0x36);
       emitb((uint8_t)disp);
       emitb(imm);
-      return 0;
-    }
-
-    /* both are registers */
-    if (reg1 != -1 && reg2 != -1) {
-      if (reg1 == 6 && reg2 == 6) return -1; /* not possible */
-      emitb(0x40 + (reg1 << 3) + reg2); /* or reg2 * 8, but shift is more efficient */
-      return 0;
-    }
-
-    /* only arg1 is a register, arg2 is an immediate value */
-    if (reg1 != -1) {
-      imm = strtol(arg2, NULL, 0);
-      emitb(0x06 + (reg1 << 3));
-      emitb(imm);
-      return 0;
-    }
-
-
-    /* 16-bit operations */
-    rr = reg16(arg1);
-
-    /* LD SP, IX/IY*/
-    prefix = index_reg(arg2);
-    if (strcmp(arg1, "SP") == 0 && prefix != -1) {
-      emitb(prefix);
-      emitb(0xF9);
-      return 0;  
-    }
-
-    /* immediate*/
-    if (rr != -1) {
-      imm = strtol(arg2, NULL, 0);
-      emitb(0x01 + (rr << 4));
-      emitw(imm);
-      return 0;
-    }
-
-    /* LD IX/IY, nn*/
-    prefix = index_reg(arg1);
-    if (prefix != -1) {
-      imm = strtol(arg2, NULL, 0);
-      emitb(prefix);
-      emitb(0x21);
-      emitw(imm);
       return 0;
     }
 
@@ -411,8 +404,9 @@ int line_codegen(char *line) {
       return 0;
     }
 
+    addr = mem_addr(arg1);
     prefix = index_reg(arg2);
-    if (prefix != -1) {
+    if (prefix != -1 && addr >= 0) {
       /* LD (nn), IX/IY*/
       emitb(prefix);
       emitb(0x22);
@@ -424,6 +418,52 @@ int line_codegen(char *line) {
       emitb(0xF9);
       return 0;
     }
+
+    /* both are registers */
+    if (reg1 != -1 && reg2 != -1) {
+      if (reg1 == 6 && reg2 == 6) return -1; /* not possible */
+      emitb(0x40 + (reg1 << 3) + reg2); /* or reg2 * 8, but shift is more efficient */
+      return 0;
+    }
+
+    /* only arg1 is a register, arg2 is an immediate value */
+    if (reg1 != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(0x06 + (reg1 << 3));
+      emitb(imm);
+      return 0;
+    }
+
+    /* 16-bit operations */
+    rr = reg16(arg1);
+
+    /* LD SP, IX/IY*/
+    prefix = index_reg(arg2);
+    if (strcmp(arg1, "SP") == 0 && prefix != -1) {
+      emitb(prefix);
+      emitb(0xF9);
+      return 0;  
+    }
+
+    /* immediate*/
+    if (rr != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(0x01 + (rr << 4));
+      emitw(imm);
+      return 0;
+    }
+
+    /* LD IX/IY, nn*/
+    prefix = index_reg(arg1);
+    if (prefix != -1) {
+      imm = strtol(arg2, NULL, 0);
+      emitb(prefix);
+      emitb(0x21);
+      emitw(imm);
+      return 0;
+    }
+
+ 
   }
 
   /* increment */
@@ -498,6 +538,7 @@ int line_codegen(char *line) {
     }
 
     /* index register, IX/IY*/
+    /* note that add ix,iy or add iy,iy isn't supported yet*/
     prefix = index_reg(arg1);
     if (prefix != -1) {
       rr = reg16(arg2);
@@ -641,26 +682,16 @@ int line_codegen(char *line) {
       cond = jpcond(arg1);
       if (cond == -1) return -1;
       emitb(0xC2 + (cond << 3));
-      label_addr = get_label_addr(arg2);
-      if (label_addr != -1) {
-        emitw(label_addr);
-      } else { /* not label, raw address*/
-        imm = strtol(arg2, NULL, 0);
-        emitw(imm);
-      }
+      imm = strtol(arg2, NULL, 0);
+      emitw(imm);
       return 0;
     }
 
       /* JP nn */
     if (arg1[0] != 0) {
       emitb(0xC3);
-      label_addr = get_label_addr(arg1);
-      if (label_addr != -1) {
-        emitw(label_addr);
-      } else {
-        imm = strtol(arg1, NULL, 0);
-        emitw(imm);
-      }
+      imm = strtol(arg1, NULL, 0);
+      emitw(imm);
       return 0;
     }
   }
@@ -829,10 +860,11 @@ int main(int argc, char *argv[]) {
     pc = basepc; /* reset the program counter */
     /* rewind input file for each pass */
     lseek(infd, 0, SEEK_SET);
-    int line_number = 0; /* debug */
+    current_line = 0;
     while (1) {
       int i = 0;
       int code = 1; /* default to error*/
+      char temp_line[127];
       memset(line, 0, 127);
       /* read until newline */
       for (; i < sizeof(line) - 1; i++) {
@@ -855,12 +887,13 @@ int main(int argc, char *argv[]) {
       }
 
       line[i] = '\0'; /* null terminate */
+      strcpy(temp_line, line);
 
       if (line_codegen(line) < 0) { /* assemble the line*/
-        printf("Error assembling line: %s\n", line);
+        printf("Error assembling line %d: %s\n", current_line+1, temp_line);
         break;
       }
-      line_number++;
+      current_line++;
     }
   }
 
