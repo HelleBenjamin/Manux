@@ -37,81 +37,71 @@
 ; n bytes data
 */
 
-static MFS *fs = (MFS *)FS_ROOT_MADDR;
+static MFS_root *fs = (MFS_root *)FS_ROOT_MADDR;
+static uint8_t* block_bitmap = (uint8_t *)FS_BITMAP_ADDR;
+static file* files = (file *)FS_FENTRY_ADDR;
 
 static uint8_t *fs_rootfs = (uint8_t *)FS_ROOT_MADDR;
 static uint8_t *tempbuf = (uint8_t *)FS_BUF; /* 512 bytes max, this should be used instead of using local buffers*/
 
-int mfs_init(void) {
-  /* Load filesystem root block to memory, etc..*/
-  if(disk_read((char *)fs, FS_ROOT_SECTOR, 1) == 0) {
-    if(fs->checksum != CHECKSUM) {
-      kputs(" Root FS checksum incorrect. Filesystem may not be formatted or is wrong version\n");
-    } if (fs->formatted == 0) {
-      kputs(" Root FS not formatted yet. Format? (y/n): ");
-      char input = kgetchar();
-      if (input != 'y') { return -1; }
-      mfs_format();
-    }
-    kputs(" Root FS loaded\n");
-  } else { kputs(" Loading Root FS failed\n"); kernel_panic(); }
-  return 0;
+/* helpers */
+int bitmap_get(uint16_t block) {
+  return block_bitmap[block >> 3] & (1 << (block % 8));
 }
 
-int mfs_format(void) {
-  memset(fs, 0, 512); /* Setup root */
-  fs->checksum = CHECKSUM;
-  fs->formatted = 1;
-  fs->filecount = 0;
+void bitmap_set(uint16_t block) {
+  block_bitmap[block >> 3] |= (1 << (block % 8));
+}
 
-  disk_write((char *)fs, FS_ROOT_SECTOR, 1);
+void bitmap_clear(uint16_t block) {
+  block_bitmap[block >> 3] &= ~(1 << (block % 8));
+}
 
-  memset(tempbuf, 0, 512);
-  for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) {
-    disk_write(tempbuf, i, 1);
+int mfs_init(void) {
+  /* Load filesystem root block to memory, etc..*/
+  if(disk_read((char *)fs, 0, 1) == 0) {
+    if(fs->checksum != CHECKSUM) {
+      kputs(" Filesystem checksum incorrect. Filesystem may not be formatted or version is wrong\n");
+      return -1;
+    } else {
+    if (disk_read((char *)block_bitmap, fs->bitmap_sector, 1) != 0) {
+      kputs(" Block bitmap failed to load\n");
+      return -1;
+    }
+    if (disk_read((char *)files, fs->fentry_sector, 1) != 0) {
+      kputs(" File entry failed to load\n");
+      return -1;
+    }
+    kputs(" Filesystem loaded\n");
+    return 0;
+    }
   }
-
-  return 0;
+  return -1; /* failed */
 }
 
 void write_changes(void) {
   /* Save root to disk*/
-  disk_write((char *)fs, FS_ROOT_SECTOR, 1);
+  disk_write((char *)fs, 0, 1); /* root sector, always at sector 0 */
+  disk_write((char *)block_bitmap, fs->bitmap_sector, 1); /* block bitmap*/
+  disk_write((char *)files, fs->fentry_sector, 1); /* file entries*/
 }
 
 /* Returns the sector of a free block*/
-uint16_t find_free_block(void) {
-  /* slow ass function, don't use this as an example */
-  char tempbuf2[512];
-  memset(tempbuf2, 0, 512);
-  for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) { /* loop through all blocks */
-    disk_read(tempbuf2, i, 1);
-    if (tempbuf2[0] == 0) { /* found free block */
-      int is_allocated = 0;
-      for (uint16_t j = 0; j < fs->filecount; ++j) { /* check if any created file (no written data) is using this block*/
-        uint16_t next_block = fs->files[j].block;
-        while (next_block != 0 && next_block < FS_MAX_SECTORS) { /* and again we loop */
-          if (next_block == i) { /* the block is allocated to another file*/
-            is_allocated = 1;
-            break; /* exit loop*/
-          }
-          disk_read(tempbuf, next_block, 1);
-          next_block = *(uint16_t*)(tempbuf + 1);
-        }
-        if (is_allocated) break; /* no free block fouund*/
-      }
-      if (!is_allocated) {
-        return i; /* return the free block*/
-      }
+uint16_t alloc_block(void) {
+  for (uint16_t block = fs->data_start_sector; block < fs->total_sectors; block++) {
+    if (!bitmap_get(block)) { /* free block*/
+      bitmap_set(block); /* mark it used */
+      return block;
     }
   }
-  return 0;
+
+  return 0; /* no free blocks */
 }
 
 file* find_file(char *fname) __z88dk_fastcall {
-  for (uint8_t i = 0; i < fs->filecount; ++i) { // or MAX_FILES but slower. filecount should be fine
-    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
-      return &fs->files[i]; /* return pointer to the file*/
+  for (uint8_t i = 0; i < fs->filecount; ++i) { // or fs->max_files but slower. filecount should be fine
+    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
+      return &files[i]; /* return pointer to the file*/
     }
   }
   return NULL;
@@ -119,8 +109,8 @@ file* find_file(char *fname) __z88dk_fastcall {
 
 uint16_t get_file_block(char *fname) __z88dk_fastcall {
   for (uint8_t i = 0; i < fs->filecount; ++i) {
-    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
-      return fs->files[i].block;
+    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
+      return files[i].block;
     }
   }
   return 0;
@@ -128,7 +118,7 @@ uint16_t get_file_block(char *fname) __z88dk_fastcall {
 
 uint8_t get_file_index(char *fname) __z88dk_fastcall {
   for (uint8_t i = 0; i < fs->filecount; ++i) {
-    if (strncmp(fname, fs->files[i].name, MAX_FNAME_LEN) == 0) {
+    if (strncmp(fname, files[i].name, MAX_FNAME_LEN) == 0) {
       return i;
     }
   }
@@ -140,14 +130,14 @@ int load_executable(char *fname, uint16_t addr) {
   int i = get_file_index(fname);
   if (i == 0xFF) return -1;
 
-  int16_t remaining = fs->files[i].size;
+  int16_t remaining = files[i].size;
   uint16_t bytes_in_block = 0;
-  uint16_t sector = fs->files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
+  uint16_t sector = files[i].block; /* First sector, 1 block = 512 bytes = 1 sector*/
 
   uint16_t offset = 0x0000;
   uint8_t* dest = (uint8_t*)addr;
 
-  while (remaining != 0 && sector != 0 && sector < FS_MAX_SECTORS) { /* read file until remaining is 0*/
+  while (remaining != 0 && sector != 0 && sector < fs->total_sectors) { /* read file until remaining is 0*/
     bytes_in_block = (remaining > BLOCK_SIZE-4) ? (BLOCK_SIZE-4) : remaining; /* how many bytes to read */
     disk_read(tempbuf, sector, 1);
 
@@ -173,34 +163,34 @@ int mfs_open(char *fname, int flags) {
   file* current_file = find_file(fname);
   if (current_file == NULL && (flags & O_CREAT)) { /* if file doesn't exist, create it */
     /* safety checks */
-    volatile uint16_t block = find_free_block(); /* remove volatile?*/
-    if (block == 0 || fs->filecount >= MAX_FILES) {
+    volatile uint16_t block = alloc_block(); /* remove volatile?*/
+    if (block == 0 || fs->filecount >= fs->max_files) {
       return -1; /* No free blocks or block allocation failed */
     }
 
     uint8_t index = 0; /* file index*/
     /* find free nameslot*/
-    for (index = 0; index < MAX_FILES; ++index) {
-      if (fs->files[index].used == 0) break;
+    for (index = 0; index < fs->max_files; ++index) {
+      if (files[index].used == 0) break;
     }
 
-    if (index == MAX_FILES) {
+    if (index == fs->max_files) {
       return -1; /* No free nameslots */
     }
 
-    strncpy(fs->files[index].name, &fname[0], MAX_FNAME_LEN-1); /* copy filename*/
-    fs->files[index].used = 1; /* mark used*/
-    fs->files[index].flags = (flags & ~O_CREAT); /* include user flags*/
-    fs->files[index].size  = 0;     /* default to 0*/
-    fs->files[index].block_size = 0;
-    fs->files[index].block = block; /* initial start block */
+    strncpy(files[index].name, &fname[0], MAX_FNAME_LEN-1); /* copy filename*/
+    files[index].used = 1; /* mark used*/
+    files[index].flags = (flags & ~O_CREAT); /* include user flags*/
+    files[index].size  = 0;     /* default to 0*/
+    files[index].block_size = 0;
+    files[index].block = block; /* initial start block */
 
     memset(tempbuf, 0, 512); /* blank block*/
     tempbuf[0] = 1; /* mark used */
     disk_write(tempbuf, block, 1); /* Reserve first block, write it immediately */
 
     ++fs->filecount; /* update filecount */
-    current_file = &fs->files[index];
+    current_file = &files[index];
     write_changes(); /* save changes to disk*/
   } else if (current_file == NULL) {
     return -1; /* file doesn't exist */
@@ -271,7 +261,7 @@ int mfs_read(int fd, char *buf, uint16_t count) {
   uint16_t remaining = count; /* remaining bytes to read*/
   uint16_t written = 0; /* bytes written*/
 
-  while (remaining > 0 && entry->cur_block != 0 && entry->cur_block < FS_MAX_SECTORS && entry->pos < entry->file->size) {
+  while (remaining > 0 && entry->cur_block != 0 && entry->cur_block < fs->total_sectors && entry->pos < entry->file->size) {
     disk_read(tempbuf, entry->cur_block, 1); /* read current block*/
     uint16_t available = (BLOCK_SIZE-4) - entry->block_offset; /* available bytes*/
     uint16_t to_read = (remaining < available) ? remaining : available;
@@ -313,8 +303,8 @@ int mfs_write(int fd, char *buf, uint16_t count) {
   uint16_t written = 0; /* bytes written*/ 
 
   while (remaining > 0) {
-    if (entry->cur_block == 0 || entry->cur_block >= FS_MAX_SECTORS) {
-      uint16_t block = find_free_block();
+    if (entry->cur_block == 0 || entry->cur_block >= fs->total_sectors) {
+      uint16_t block = alloc_block();
       if (block == 0) return -1; /* out of space*/
 
       /* init the new block */
@@ -366,7 +356,7 @@ int mfs_write(int fd, char *buf, uint16_t count) {
 
 int mfs_sync(void) {
   /* save all changes to disk */
-  disk_write((char *)fs_rootfs, FS_ROOT_SECTOR, 1); /* root block */
+  write_changes();
   return 0;
 }
 
@@ -386,7 +376,7 @@ int mfs_seek(int fd, uint16_t pos, int whence) {
     offset = entry->file->size + pos;
   }
 
-  while (offset >= (BLOCK_SIZE-4) && block != 0 && block < FS_MAX_SECTORS) {
+  while (offset >= (BLOCK_SIZE-4) && block != 0 && block < fs->total_sectors) {
     disk_read(tempbuf, block, 1);
     block = *(uint16_t*)(tempbuf + 1);
     offset -= (BLOCK_SIZE-4);
@@ -403,11 +393,10 @@ int dump_fs(void) {
   /* debugging only */
   kputs("Filesystem debug info:\n");
   kputs("Checksum: "); kputh(fs->checksum); kputs("\n");
-  kputs("Formatted: "); kputh(fs->formatted); kputs("\n");
   kputs("Filecount: "); kputh(fs->filecount); kputs("\n");
   kputs("Files: ");
   for (uint8_t i = 0; i < fs->filecount; ++i) {
-    kputs(fs->files[i].name);
+    kputs(files[i].name);
     kputchar(' ');
   }
   kputs("\n");
@@ -425,10 +414,11 @@ int mfs_delete(char *fname) __z88dk_fastcall {
   uint8_t zerobuf[512];
   memset(zerobuf, 0, 512);
 
-  while (current_block != 0 && current_block < FS_MAX_SECTORS) {
+  while (current_block != 0 && current_block < fs->total_sectors) {
     disk_read(tempbuf, current_block, 1);
     next_block = *(uint16_t *)(tempbuf + 1);
     disk_write(zerobuf, current_block, 1);  // erase current, not next
+    bitmap_clear(current_block); /* clear from bitmap*/
     current_block = next_block;
   }
 
@@ -446,7 +436,7 @@ int mfs_delete(char *fname) __z88dk_fastcall {
 int mfs_list(char *buf) __z88dk_fastcall {
   /* copy the filenames to the buffer, returns count */
   for (uint8_t i = 0; i <fs->filecount; ++i) {
-    memcpy(buf, fs->files[i].name, MAX_FNAME_LEN);
+    memcpy(buf, files[i].name, MAX_FNAME_LEN);
     buf += MAX_FNAME_LEN;
   }
 

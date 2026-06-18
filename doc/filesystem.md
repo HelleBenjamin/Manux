@@ -12,7 +12,8 @@ Filesystem versions
 -------------------
 
 - 1.0 - Initial RAM only version, released in v0.2.0, no checksum
-- 1.1 - First version with disk support, released in v0.3.0, checksum `BEEF`
+- 1.1 - First version with disk support, released in v0.3.0 prereleases, checksum `BEEF`
+- 1.2 - Improved version with bitmap, more file support, and improved root superblock, checksum `ABCD`
 
 FS Characteristics
 ------------------

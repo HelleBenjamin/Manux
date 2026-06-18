@@ -43,18 +43,23 @@ int mfs_delete(char *fname);
 FILE* disk;
 
 #define BLOCK_SIZE    512 /* Single sector */
-#define MAX_FILES     12
+#define MAX_FILES     24
 #define MAX_FNAME_LEN 12
 
 /* Checksum is also version dependent, for example v1.1 is 0xBEEF */
-#define CHECKSUM      0xBEEF /* v1.1 */
+//#define CHECKSUM      0xBEEF /* v1.1 */
+#define CHECKSUM      0xABCD /* 1.2 checksum*/
 
 #define FS_BUF        0x0000 /* Single sector sized buffer */
 #define FS_ROOT_MADDR 0x0200 /* Start of root directory in emulated RAM */
+#define FS_BITMAP_ADDR 0x0400 /* data block bitmap*/
+#define FS_FENTRY_ADDR 0x0600 /* file entries*/
 
 #define FS_ROOT_SECTOR  0 /* Start of Root directory */
-#define FS_BLOCK_SECTOR (FS_ROOT_SECTOR+1) /* Start of File blocks */
-#define FS_MAX_SECTORS  2879 /* Max sectors that the FS can use */
+#define FS_BITMAP_SECTOR 1
+#define FS_FENTRY_SECTOR 2
+#define FS_BLOCK_SECTOR (FS_FENTRY_SECTOR+1) /* Start of data blocks*/
+#define FS_MAX_SECTORS  (2880-3) /* Max sectors that the FS can use */
 
 /* file flags*/
 #define FRO      0x01
@@ -75,19 +80,27 @@ typedef struct __attribute__((packed)) {
   uint8_t   used; /* used flag */
   uint8_t   flags; /* file flags, read/write*/
   uint8_t   id; /* file id*/
-  char      name[12];
+  char      name[12]; /* including extension */
   uint16_t  size; /* file size on bytes */
-  uint8_t   block_size; /* number of blocks allocated */
+  uint16_t  block_size; /* number of blocks allocated */
   uint16_t  block;   /* Start block */
-} file; /* 20 bytes*/
+} file; /* 21 bytes*/
 
 /* Root FS structure */
-typedef struct {
-  uint16_t  checksum;
-  uint8_t   formatted;
+typedef struct __attribute__((packed)) {
+  uint8_t   jmp[3]; /* jmp short for x86, future use */
+  uint16_t  checksum; /* same as version*/
+  uint16_t  total_sectors; /* total number of sectors in disk */
+  uint16_t  bitmap_sector; /* where the bitmap is */
+  uint16_t  fentry_sector; /* where the file entry is*/
+  uint16_t  data_start_sector; /* where data blocks start*/
+  uint16_t  max_files; /* maximum number of files*/
   uint8_t   filecount;
-  file      files[MAX_FILES];
-} MFS;
+
+  /* this is for future use, x86 compatible*/
+  //uint8_t boot_code[494];
+  //uint16_t boot_sig; /* 0x55AA*/
+} MFS_root;
 
 
 typedef struct {
@@ -99,17 +112,28 @@ typedef struct {
 
 char fs_emulation_buf[0x2000];
 char fs_program_buf[0x4000];
-char temppbuf[512];
-/*pointers to the emulated fs*/
-static uint8_t *fs_rootfs = (uint8_t *)(fs_emulation_buf + FS_ROOT_SECTOR*512); /* should point to fs_emulation_buf[0]*/
-static uint8_t *tempbuf   = (uint8_t *)temppbuf; /* should point to temppbuf[0]*/
 
-static uint8_t *checksum = (uint8_t *)(fs_emulation_buf+0); /* should point to s_emulation_buf[0]]*/
-static uint8_t *formatted = (uint8_t *)(fs_emulation_buf+2); /* should point to s_emulation_buf[2]]*/
-static uint8_t *filecount = (uint8_t *)(fs_emulation_buf+3); /* should point to s_emulation_buf[3]]*/
-static file *files = (file *)(fs_emulation_buf+4); /* should point to s_emulation_buf[4]->]*/
+/*pointers to the emulated fs*/
+static uint8_t *tempbuf   = (uint8_t *)(fs_emulation_buf);
+static MFS_root *fs = (MFS_root *)(fs_emulation_buf + FS_ROOT_MADDR);
+static uint8_t* block_bitmap = (uint8_t *)(fs_emulation_buf+FS_BITMAP_ADDR);
+static file* files = (file *)(fs_emulation_buf+FS_FENTRY_ADDR);
+
+
 static mfs_fd current_fd;
 static file* current_file;
+
+int bitmap_get(uint16_t block) {
+  return block_bitmap[block >> 3] & (1 << (block % 8));
+}
+
+void bitmap_set(uint16_t block) {
+  block_bitmap[block >> 3] |= (1 << (block % 8));
+}
+
+void bitmap_clear(uint16_t block) {
+  block_bitmap[block >> 3] &= ~(1 << (block % 8));
+}
 
 
 int disk_read(char *buffer, uint16_t sector, uint8_t num_sectors) {
@@ -135,30 +159,49 @@ int disk_write(char *buffer, uint16_t sector, uint8_t num_sectors) {
 
 int mfs_init(void) {
   /* Load filesystem to memory, etc..*/
-  if(disk_read((char *)fs_rootfs, FS_ROOT_SECTOR, 1) == 0) {
-    if(*((uint16_t *)checksum) != CHECKSUM) {
-      printf(" Root FS checksum incorrect. Filesystem may not be formatted or is wrong version\n");
-      printf("Read checksum: 0x%04X, expected: 0x%04X\n", *((uint16_t *)checksum), CHECKSUM);
-    } if (*formatted == 0) {
-      printf(" Root FS not formatted yet. It needs to be formatted. Format with ./mfs-util -f\n");
+  if(disk_read((char *)fs, FS_ROOT_SECTOR, 1) == 0) {
+    if(fs->checksum != CHECKSUM) {
+      printf(" Filesystem checksum incorrect. Filesystem may not be formatted or is wrong version\n");
+      printf("Read checksum: 0x%04X, expected: 0x%04X\n", fs->checksum, CHECKSUM);
+    }
+    if (disk_read((char *)block_bitmap, fs->bitmap_sector, 1) != 0) {
+      puts(" Block bitmap failed to load\n");
+      return 1;
+    }
+    if (disk_read((char *)files, fs->fentry_sector, 1) != 0) {
+      puts(" File entry failed to load\n");
+      return 1;
     }
     printf(" Root FS loaded\n");
+    memset(&current_fd, 0, sizeof(mfs_fd));
   } else { printf(" Loading Root FS failed\n"); return 1; }
-  memset(&current_fd, 0, sizeof(mfs_fd));
+
   return 0;
 }
 
 int mfs_format(void) {
-  memset(tempbuf, 0, 512); /* Setup root */
+  printf("Formatting filesystem..\n");
+  memset(fs, 0, BLOCK_SIZE); /* Setup root */
+  /* skip jmp*/
+  fs->checksum = CHECKSUM;
+  fs->total_sectors = FS_MAX_SECTORS;
+  fs->bitmap_sector = 1;
+  fs->fentry_sector = 2;
+  fs->data_start_sector = 3;
+  fs->max_files = MAX_FILES;
+  fs->filecount = 0;
 
-  *(uint16_t *)(tempbuf + 0) = CHECKSUM; /* bytes 0-1: checksum */
-  *(uint8_t  *)(tempbuf + 2) = 1; /* byte 2: format flag */
-  *(uint8_t  *)(tempbuf + 3) = 0; /* byte 3: filecount */
+  memset(block_bitmap, 0, BLOCK_SIZE);
+  bitmap_set(0); /* mark root*/
+  bitmap_set(1); /* mark bitmap*/
+  bitmap_set(2); /* mark file entries used*/
 
-  *(uint16_t *)checksum = CHECKSUM;
-  *formatted = 1;
+  memset(files, 0, BLOCK_SIZE);
 
-  disk_write((char *)tempbuf, FS_ROOT_SECTOR, 1);
+
+  disk_write((char *)fs, FS_ROOT_SECTOR, 1);
+  disk_write((char *)block_bitmap, FS_BITMAP_SECTOR, 1);
+  disk_write((char *)files, FS_FENTRY_SECTOR, 1);
 
   memset(tempbuf, 0, 512);
   for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) {
@@ -178,35 +221,21 @@ int mfs_exit(void) {
 
 void write_changes(void) {
   /* Save root, and other loaded files, save them on disk*/
-  disk_write((char *)fs_rootfs, FS_ROOT_SECTOR, 1);
+  disk_write((char *)fs, 0, 1); /* root sector, always at sector 0 */
+  disk_write((char *)block_bitmap, fs->bitmap_sector, 1); /* block bitmap*/
+  disk_write((char *)files, fs->fentry_sector, 1); /* file entries*/
 }
 
 /* Returns the sector of a free block*/
-uint16_t find_free_block(void) {
-  char tempbuf2[512];
-  memset(tempbuf2, 0, 512);
-  for (uint16_t i = FS_BLOCK_SECTOR; i < FS_MAX_SECTORS; i++) {
-    disk_read(tempbuf2, i, 1);
-    if (tempbuf2[0] == 0) {
-      int is_allocated = 0;
-      for (uint16_t j = 0; j < MAX_FILES; ++j) {
-        uint16_t next_block = files[j].block;
-        while (next_block != 0 && next_block < FS_MAX_SECTORS) {
-          if (next_block == i) {
-            is_allocated = 1;
-            break;
-          }
-          disk_read((char *)tempbuf, next_block, 1);
-          next_block = *(uint16_t*)(tempbuf + 1);
-        }
-        if (is_allocated) break;
-      }
-      if (!is_allocated) {
-        return i;
-      }
+uint16_t alloc_block(void) {
+  for (uint16_t block = fs->data_start_sector; block < fs->total_sectors; block++) {
+    if (!bitmap_get(block)) { /* free block*/
+      bitmap_set(block); /* mark it used */
+      return block;
     }
   }
-  return 0;
+
+  return 0; /* no free blocks */
 }
 
 file* find_file(char *fname) {
@@ -269,7 +298,7 @@ uint16_t save_to_disk(char *fname) {
   /* automatically overwrite the existing file*/
   file temp = files[i];
   mfs_delete(fname); /* delete it first */
-  (*filecount)++; /* dirty hack*/
+  fs->filecount++;
 
   /* figure out how many blocks we need */
   int16_t remaining = temp.size;
@@ -287,7 +316,7 @@ uint16_t save_to_disk(char *fname) {
       localbuf[0] = 1;
       disk_write((char*)localbuf, block_sectors[i-1], 1);
     }
-    block_sectors[i] = find_free_block();
+    block_sectors[i] = alloc_block();
     if (block_sectors[i] == 0) return 1; /* out of space*/
   }
 
@@ -320,7 +349,7 @@ uint16_t save_to_disk(char *fname) {
 
 void list_files(void) {
   printf("File list:\n");
-  for (uint8_t i = 0; i < *filecount; ++i) {
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
     printf("%s %d %d\n", files[i].name, files[i].size, files[i].block);
   }
 }
@@ -337,8 +366,8 @@ int mfs_open(char *fname, int flags) {
   current_file = find_file(fname);
   if (current_file == NULL && (flags & O_CREAT)) { /* if file doesn't exist, create it */
     /* safety checks */
-    volatile uint16_t block = find_free_block(); /* Must use volatile to avoid compiler optimization which fucks these up*/
-    if (block == 0 || *filecount >= MAX_FILES) {
+    volatile uint16_t block = alloc_block(); /* Must use volatile to avoid compiler optimization which fucks these up*/
+    if (block == 0 || fs->filecount >= MAX_FILES) {
       return 2; /* No free blocks or block allocation failed */
     }
 
@@ -363,7 +392,7 @@ int mfs_open(char *fname, int flags) {
     *(tempbuf) = 1; /* mark used */
     disk_write((char *)tempbuf, block, 1); /* Reserve first block, write it immediately */
 
-    ++(*filecount); /* update filecount */
+    ++(fs->filecount); /* update filecount */
     write_changes();
 
     current_file = &files[index];
@@ -414,18 +443,16 @@ int mfs_write(char *buf, uint16_t count) {
 
 int mfs_sync() {
   /* save all changes to disk */
-
-  disk_write((char *)fs_rootfs, FS_ROOT_SECTOR, 1); /* root block */
+  write_changes();
   return 0;
 }
 
 int dump_fs() {
   printf("Filesystem info:\n");
-  printf("Checksum: %04x\n", *(uint16_t *)checksum);
-  printf("Formatted: %d\n", *formatted);
-  printf("Filecount: %d\n", *filecount);
+  printf("Checksum: %04x\n", fs->checksum);
+  printf("Filecount: %d\n", fs->filecount);
   printf("Files: ");
-  for (uint8_t i = 0; i < *filecount; ++i) {
+  for (uint8_t i = 0; i < fs->filecount; ++i) {
     printf("%s ", files[i].name);
   }
   printf("\n");
@@ -456,7 +483,7 @@ int mfs_delete(char *fname) {
   tempfile->block = 0;
   tempfile->block_size = 0;
 
-  --(*filecount);
+  --(fs->filecount);
   write_changes(); /* save immediately */
 
   return 0;
@@ -530,6 +557,8 @@ int main(int argc, char **argv) {
   /* init MFS */
   if (mfs_init() != 0) {
     printf("MFS init failed\n");
+    /* try formatting it */
+    mfs_format();
     return 1;
   }
 
