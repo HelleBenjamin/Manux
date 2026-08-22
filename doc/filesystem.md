@@ -6,7 +6,7 @@ It's designed to be simple and minimalistic, so it supports only files, no direc
 
 There is a tool called `mfs-util` which can be used to manage the filesystem from linux.
 
-This document is not complete yet, but gives the core idea.
+This document is not complete yet.
 
 Filesystem versions
 -------------------
@@ -19,23 +19,45 @@ FS Characteristics
 ------------------
 
 - Block size: 512 bytes
-- Max files: 12
+- Max files: 24
 - Max filename length: 12 bytes
-- Root directory size: 1 block
-- Root directory location: sector 0
+- Root superblock size: 1 block
+- Root superblock location: sector 0
 - Block header size: 4 bytes
 - Data per block: 508 bytes
-- Filesystem checksum: 0xBEEF
+- Root superblock, block bitmap and file entries at own sectors
 
-Root FS structure
+Root superblock structure
 -----------------
 
 The root sector occupies the first sector of the disk. It contains the following information:
 
-- Filesystem checksum, offset 0x00, size 2 bytes
-- Format flag, offset 0x02, size 1 byte
-- Number of files, offset 0x03, size 1 byte
-- File entries, offset 0x04, size MAX_FILES * 20 bytes, eg. 12 * 20 = 240 bytes
+- Jump instruction for x86 machines
+- Filesystem checksum size 2 bytes
+- Number of sectors in disk, size 2 bytes
+- Bitmap sector, usually 1, size 2 bytes
+- File entry sector, usually 2, size 2 bytes
+- Data block start sector, usually 3, size 2 bytes
+- Maximum number of files, 2 bytes
+- Number of files, size 1 byte
+
+Here the structure is represented in C:
+```C
+typedef struct {
+  uint8_t   jmp[3]; /* jmp short for x86, future use */
+  uint16_t  checksum; /* same as version*/
+  uint16_t  total_sectors; /* total number of sectors in disk */
+  uint16_t  bitmap_sector; /* where the bitmap is */
+  uint16_t  fentry_sector; /* where the file entry is*/
+  uint16_t  data_start_sector; /* where data blocks start*/
+  uint16_t  max_files; /* maximum number of files*/
+  uint8_t   filecount;
+
+  /* this is for future use, x86 compatible*/
+  //uint8_t boot_code[494];
+  //uint16_t boot_sig; /* 0x55AA*/
+} MFS_root;
+```
 
 File Entry structure
 --------------------
@@ -49,12 +71,12 @@ typedef struct {
   uint8_t   id;         /* file id*/
   char      name[12];   /* file name*/
   uint16_t  size;       /* file size in bytes */
-  uint8_t   block_size; /* number of blocks allocated */
+  uint16_t   block_size; /* number of blocks allocated */
   uint16_t  block;      /* first start block */
 } file;
 ```
 
-Each file entry is 20 bytes long.
+Each file entry is 21 bytes long.
 
 Block structure
 ---------------

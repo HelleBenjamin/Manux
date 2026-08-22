@@ -28,7 +28,7 @@ WRITE_DISK:
   out ($14), a
   ld  a, $02
   out ($10), a ; Write "write"-command
-  nop ; Wait
+  call WAIT_DISK
   in a, ($15) ; Status in A
   ret
 
@@ -50,8 +50,14 @@ READ_DISK:
   out ($14), a
   ld  a, $01
   out ($10), a ; Write "read"-command
-  nop ; Wait
+  call WAIT_DISK ; Wait
   in a, ($15) ; Status in A
+  ret
+
+WAIT_DISK:
+  in a, ($15) ; Status in A
+  cp 2
+  jr z, WAIT_DISK
   ret
 
 ENDIF

@@ -88,8 +88,9 @@ int exec_init(char *fname) __z88dk_fastcall {
   }
 
   /* get the size of the shell file */
-  file *shellfile = find_file(fname);
-  int size = shellfile->size;
+  /* unused for now*/
+  //file *shellfile = find_file(fname);
+  //int size = shellfile->size;
 
   __asm__ ( /* assembly function contains the jump*/
     "extern exec_init_jump\n"

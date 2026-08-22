@@ -9,7 +9,6 @@
 
 #include <kernel/kstdio.h>
 #include <driver/tty.h>
-#include <stdio.h>
 #include <stdarg.h>
 
 int kputchar(char c) __z88dk_fastcall {
