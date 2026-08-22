@@ -39,7 +39,7 @@
 #include <stdio.h>
 
 int outputfd; /* output file descriptor */
-uint16_t pc = 0x4100; /* program counter, keeps track of current address, defaults to 0x4100 */
+uint16_t pc = 0x5000; /* program counter, keeps track of current address, defaults to 0x4100 */
 int pass = 0; /* pass number, 0 first pass: collect labels, pass 1: codegen*/
 
 struct label {

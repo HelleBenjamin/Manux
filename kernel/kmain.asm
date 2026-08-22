@@ -28,15 +28,18 @@ SECTION code_home ; Home section is only used for the kernel
 
   ; Memory map
   ; 0x0000 - 0x1FFF Kernel ROM
-  ; 0x2000 - 0x2FFF Kernel Workspace(fd table, etc)
-  ; 0x3000 - 0x3FFF Init/Shell area(loaded by the kernel)
-  ; 0x4000 - 0xEFFF User program area
-  ; 0xF000 - 0xFFFF Stack, buffers, etc
+  ; 0x2000 - 0x2FFF Kernel Workspace(fs buffers, variables, ...)
+  ; 0x3000 - 0x37FF Kernel stack
+  ; 0x3800 - 0x47FF Init/Shell area(loaded by the kernel)
+  ; 0x4800 - 0x4BFF Shell stack
+  ; 0x4C00 - 0x4EFF Unused area
+  ; 0x4F00 - 0x4FFF PIH area
+  ; 0x5000 - 0xFFFF User program area
 
   PUBLIC _main
 _main:
 KERNEL_ENTRY:
-  ; assumes that SP already set
+  ld sp, KERNEL_STACK ; sets the kernel SP
 
   XOR A ; Clear A
 
@@ -80,8 +83,9 @@ KP_LOOP:
 
   PUBLIC exec_init_jump
 exec_init_jump:
-  ld sp, SHELL_STACK
-  jp 0x3000
+  ld sp, SHELL_STACK ; stack top
+  ld (SHELL_SP), sp
+  jp SHELL_AREA
 
 REG_DUMP:
   EXTERN _kputh

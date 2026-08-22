@@ -5,12 +5,19 @@
 
 #include <stdint.h>
 
+#ifndef KERNEL_WORKSPACE
 #define KERNEL_WORKSPACE 0x2000
+#endif
 
 #define KERNEL_FLAGS (KERNEL_WORKSPACE+0x08)
 
 /* Program Info Header */
-#define PIH_BASE      0x4000
+#ifndef USER_AREA
+#define USER_AREA 0x5000
+#endif
+#ifndef PIH_BASE
+#define PIH_BASE      0x4F00
+#endif
 #define PIH_MAGIC     (PIH_BASE+0x00)
 #define PIH_SIZE      (PIH_BASE+0x02)
 #define PIH_ENTRY     (PIH_BASE+0x04)
@@ -18,19 +25,32 @@
 #define PIH_EXITCODE  (PIH_BASE+0x08)
 #define PIH_ARGC      (PIH_BASE+0x0A)
 #define PIH_ARGV      (PIH_BASE+0x0C)
-#define PIH_CODE      (PIH_BASE+0x100)
+#define PIH_CODE      USER_AREA
 
 #define MANUX_MAGIC   0x4D58 /* "MX" */
 
 /* Stack definitions */
-#ifndef REGISTER_SP
-#define REGISTER_SP   0xFFFF
+#ifndef STACK_BASE
+#define STACK_BASE    0x3000
 #endif
-#define KERNEL_STACK  REGISTER_SP /* 2048 bytes*/
-#define SHELL_SP      REGISTER_SP-0x800 /* 2048 bytes*/
-#define SHELL_CODE_AREA 0x3000
-#define USER_SP       0xEFFF /* Top of user area*/
-#define USER_CODE_AREA 0x4100
+
+#define KERNEL_STACK  STACK_BASE+0x7FF /* 2048 bytes*/
+
+
+/* shell*/
+#ifndef SHELL_AREA
+#define SHELL_AREA 0x3800
+#endif
+#define SHELL_CODE_AREA SHELL_AREA
+#define SHELL_SP      SHELL_AREA+0x1000+0x3FF /* 1024 bytes*/
+
+/* userland*/
+#ifndef USER_STACK
+#define USER_STACK    0xFFFF
+#endif
+#define USER_SP       USER_STACK /* Top of user area*/
+
+#define USER_CODE_AREA USER_AREA
 
 #define ARGV_SIZE 242
 

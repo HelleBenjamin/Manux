@@ -419,11 +419,11 @@ SYS_EXECV:
   LD DE, 0xFFFF ; check if error(-1)
   SBC HL, DE
   JP Z, SYSCALL_END
-  ; replace the return address with 0x4100, and set SP to USER_SP
+  ; replace the return address with USER_AREA(default 0x5000), and set SP to USER_SP
   LD (TMP_REG1), SP
   LD HL, USER_STACK
   LD SP, HL
-  LD HL, 0x4100 ; push the return address
+  LD HL, USER_AREA ; push the return address
   PUSH HL
   LD (SAVED_SP), SP
   LD SP, (TMP_REG1)
@@ -435,8 +435,8 @@ SYS_EXECV:
   POP HL
   POP HL
   ; set HL and BC to argv and argc
-  LD BC, (0x400A) ; argc, points to PIH_ARGC
-  LD HL, 0x400C ; argv, points to PIH_ARGV
+  LD BC, (PIH_AREA + 0xA) ; argc, points to PIH_ARGC
+  LD HL, PIH_AREA +0xC ; argv, points to PIH_ARGV
   JP SYSCALL_END_SKIP
 
 SYS_LIST:

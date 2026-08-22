@@ -7,3 +7,4 @@ MANUX.asm
 disk.img
 asm.c
 bemu80/bemu80
+.env

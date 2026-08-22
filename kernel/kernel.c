@@ -30,7 +30,7 @@ int kernel_main(void) {
   return 0;
 }
 
-static PIH_t* pih = (PIH_t*)0x4000; /* program info header */
+static PIH_t* pih = (PIH_t*)PIH_BASE; /* program info header */
 
 int execv(char *fname, char *argv[]) {
   if (load_executable(fname, USER_CODE_AREA) == -1) return -1; /* file not found, return immediately */

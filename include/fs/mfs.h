@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <kernel/kernel.h>
 
 
 #define BLOCK_SIZE    512 /* Single sector */
@@ -12,10 +13,10 @@
 
 #define CHECKSUM      0xABCD /* 1.2 checksum*/
 
-#define FS_BUF        0xF000 /* Single sector sized buffer */
-#define FS_ROOT_MADDR 0xF200 /* Start of root directory in RAM */
-#define FS_BITMAP_ADDR 0xF400 /* data block bitmap*/
-#define FS_FENTRY_ADDR 0xF600 /* file entries*/
+#define FS_BUF        (KERNEL_WORKSPACE+0x200)  /* Single sector sized buffer */
+#define FS_ROOT_MADDR (KERNEL_WORKSPACE+0x400)  /* Start of root directory in RAM */
+#define FS_BITMAP_ADDR (KERNEL_WORKSPACE+0x600) /* data block bitmap*/
+#define FS_FENTRY_ADDR (KERNEL_WORKSPACE+0x800) /* file entries*/
 
 /* file flags*/
 #define FRO      0x01

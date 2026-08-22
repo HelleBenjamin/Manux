@@ -26,11 +26,11 @@ export AS CC AS_FLAGS CCU_FLAGS BUILDDIR ROOTDIR
 all: build $(OBJECTS)
 
 $(ROOTDIR)/build/userland/%.o: %.c
-	$(CC)	$(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x4100 --opt-code-size -pragma-define:CRT_ENABLE_COMMANDLINE=2 -pragma-define:CRT_INCLUDE_DRIVER_INSTANTIATION=1 $(PRAGMA_DEFINES) $< $(STDIO_DRV) -o $@
+	$(CC)	$(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x5000 --opt-code-size -pragma-define:CRT_ENABLE_COMMANDLINE=2 -pragma-define:CRT_INCLUDE_DRIVER_INSTANTIATION=1 $(PRAGMA_DEFINES) $< $(STDIO_DRV) -o $@
 
 # shell is a special case, it needs to be compiled with a different address
 build/SHELL.BIN: $(SHELL_SRC)
-	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3000 $(PRAGMA_DEFINES) $(SHELL_SRC) -o $(BUILDDIR)/userland/SHELL.bin
+	$(CC) $(CCU_FLAGS) -pragma-define:CRT_ORG_CODE=0x3800 $(PRAGMA_DEFINES) $(SHELL_SRC) -o $(BUILDDIR)/userland/SHELL.bin
 	mv $(BUILDDIR)/userland/SHELL.rom $(BUILDDIR)/SHELL.BIN
 
 all: build $(OBJECTS) build/SHELL.BIN final_image

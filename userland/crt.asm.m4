@@ -116,7 +116,7 @@ IF __crt_enable_commandline == 2
     sub a, c ; ARGV_SIZE-(argc+1)*2
     add a, 0x0C ; offset of argv in PIH
     ld l, a
-    ld h, 0x40
+    ld h, 0x4F ; high byte of 16-bit addr
     pop bc 
     push hl ; argv
     push bc ; argc

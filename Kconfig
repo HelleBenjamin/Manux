@@ -2,144 +2,162 @@ menu "Manux Kernel Configuration"
 
     menu "Memory Configuration"
 
-
         config AS_RAM_START
-            hex "The address where the system ram starts"
+            hex "Set the system ram start address"
             default 0x2000
             range 0x0000 0xFFFF
-            prompt "Set the system ram start address"
-            help 
-            "The address where the system ram starts"
+            help
+                "The address where the system ram starts"
 
         config COMMON_KERNEL_WORKSPACE
-            hex "The address where the kernel workspace starts"
+            hex "Set the kernel workspace start address"
             default 0x2000
             range 0x0000 0xFFFF
-            prompt "Set the kernel workspace start address"
-            help 
-            "The address where the kernel workspace starts. The workspace holds important kernel variables and data structures."
+            help
+                "The address where the kernel workspace starts. The workspace holds important kernel variables and data structures."
 
-        menu "Stack Configuration"
-            config COMMON_REGISTER_SP
-                hex
-                default 0xFFFF
-                range 0x0000 0xFFFF
-                prompt "Set the stack start address"
-                help 
-                "The address where the stack starts downwards"
-
-        endmenu
+        config COMMON_STACK_BASE
+            hex "Set the stack base start address"
+            default 0x3000
+            range 0x0000 0xFFFF
+            help
+                "The address where kernel and user stacks are defined from, kernel stack BASE+0x7FF, shell stack BASE+0x3FF"
+            
         
+        config COMMON_USER_STACK
+            hex "Set the user stack start address"
+            default 0xFFFF
+            range 0x0000 0xFFFF
+            help
+                "The userland stack start, grows downwards. Usually top of the memory"
+
+        config COMMON_REGISTER_SP
+            hex "Initial SP value"
+            default COMMON_USER_STACK
+            range 0x0000 0xFFFF
+            help
+                "Initial SP value to boot the kernel"
+
+        config COMMON_SHELL_AREA
+            hex "Shell start address"
+            default 0x3800
+            range 0x0000 0xFFFF
+            help
+                "Shell/init is loaded there"
+        
+        config COMMON_USER_AREA
+            hex "Where userland programs loaded to"
+            default 0x5000
+            range 0x0000 0xFFFF
+            help
+                "The address where all userland programs are loaded, except for shell"
+
+        config COMMON_PIH_AREA
+            hex "Where PIH is located"
+            default 0x4F00
+            range 0x0000 0xFFFF
+            help
+                "The address where the Program Info Header(PIH) is located, usually before user area. Requires 256 bytes of free memory."
+
+
         menu "Heap Configuration"
 
             config CC_ENABLE_HEAP
-                bool
+                bool "Enable the kernel heap"
                 default n
-                prompt "Enable the kernel heap"
                 help
-                "Enable the kernel heap"
+                    "Enable the kernel heap"
 
             config CC_HEAP_SIZE
                 depends on CC_ENABLE_HEAP
-                hex "The size of the kernel heap"
+                hex "Set the kernel heap size (B)"
                 default 0x1000
                 range 0x0000 0xFFFF
-                prompt "Set the kernel heap size (B)"
                 help
-                "The size of the kernel heap"
+                    "The size of the kernel heap"
+
             config CC_HEAP_ADDRESS
                 depends on CC_ENABLE_HEAP
-                hex "The address of the kernel heap"
+                hex "Set the kernel heap address"
                 default 0xF000
                 range 0x0000 0xFFFF
-                prompt "Set the kernel heap address"
                 help
-                "The address of the kernel heap"
+                    "The address of the kernel heap"
 
         endmenu
 
     endmenu
-    
+
     menu "z88dk Options"
         config CC_ENABLE_STDIO
-            bool
+            bool "Enable z88dk's stdio"
             default y
-            prompt "Enable z88dk's stdio"
             help
-            "Enable z88dk's stdio. May be required for some programs."
+                "Enable z88dk's stdio. May be required for some programs."
+
         config CC_CRT_MODEL
-            hex "Data compression model"
+            hex "Set the data compression model"
             default 1
             range 0 3
-            prompt "Set the data compression model"
             help
-            "Data compression model used for ROM data. See the z88dk documentation for more information."
+                "Data compression model used for ROM data. See the z88dk documentation for more information."
 
         config COMMON_CRT_ENABLE_RST
-            hex
+            hex "Set the rst vector bitmask"
             default 0x96
             range 0x00 0xff
-            prompt "Set the rst vector bitmask"
             help
-            "0x02 = RST 0x08, 0x04 = RST 0x10, etc.."
+                "0x02 = RST 0x08, 0x04 = RST 0x10, etc.."
 
     endmenu
 
     menu "Kernel Options"
         config COMMON_CRT_ORG_CODE
-            hex "The address where the kernel code starts"
+            hex "Set the kernel start address."
             default 0x0000
             range 0x0000 0xFFFF
-            prompt "Set the kernel start address."
             help
-            "The address where the kernel starts. Note: 4 bytes are reserved for syscall vector(JP Callee + 1 align byte)."
+                "The address where the kernel starts. Note: 4 bytes are reserved for syscall vector(JP Callee + 1 align byte)."
 
         config COMMON_CRT_ORG_BSS
-            hex "The address where the kernel bss starts"
+            hex "Set the kernel bss start address."
             default 0x2A00
             range 0x0000 0xFFFF
-            prompt "Set the kernel bss start address."
             help
-            "The address where the kernel bss starts."
+                "The address where the kernel bss starts."
 
         config COMMON_CRT_ORG_DATA
-            hex "The address where the kernel data starts"
+            int "Set the kernel data start address."
             default -1
-            range 0x0000 0xFFFF
-            prompt "Set the kernel data start address."
+            range -1 65535
             help
-            "The address where the kernel data starts."
+                "The address where the kernel data starts."
 
         config COMMON_CLK_FREQ
-            hex "The clock frequency in kHz"
+            hex "Set the clock frequency"
             default 1000
-            prompt "Set the clock frequency"
             help
-            "The clock frequency in kHz"
+                "The clock frequency in kHz"
 
-        endmenu
     endmenu
 
     menu "Drivers"
         menu "TTY"
             config COMMON_STDIO_PORT
-                hex
+                hex "Set the TTY(stdio) port"
                 default 0x81
                 range 0x00 0xFF
-                prompt "Set the TTY(stdio) port"
                 help
-                "The TTY port which is used by the TTY driver for serial communication"
-
+                    "The TTY port which is used by the TTY driver for serial communication"
         endmenu
     endmenu
 
     menu "Target"
         config COMMON_TARGET_BEMU80
-            bool
+            bool "Build for the bemu80 emulator target"
             default y
-            prompt "Build for the bemu80 emulator target"
             help
-            "Build for the bemu80 emulator target. This is the default target."
+                "Build for the bemu80 emulator target. This is the default target."
     endmenu
 
 endmenu

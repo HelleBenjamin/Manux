@@ -20,10 +20,25 @@ Memory map
 Memory is organized as follows:
 
 - 0x0000-0x1FFF: Kernel ROM
-- 0x2000-0x2FFF: Kernel workspace, BSS, and such
-- 0x3000-0x3FFF: Shell/init program location
-- 0x4000-0xEFFF: User program space
-- 0xF000-0xFFFF: Stack, buffers, etc.
+
+- 0x2000-0x2FFF: Kernel workspace:
+- 0x2000-0x2106: Variables
+- 0x2106-0x21FF: TTY buffer, 250 bytes
+- 0x2200-0x23FF: FS_BUF, Scratch sector, 512 bytes
+- 0x2400-0x25FF: FS_ROOT_MADDR, 512 bytes
+- 0x2600-0x27FF: FS_BITMAP_ADDR, 512 bytes
+- 0x2800-0x29FF: FS_FENTRY_ADDR, 512 bytes
+- 0x2A00-0x2FFF: Kernel BSS
+
+- 0x3000-0x37FF: Kernel stack, 2048 bytes
+- 0x3800-0x47FF: Init/Shell program area, 4096 bytes
+- 0x4800-0x4BFF: Init/Shell stack, 1024 bytes
+- 0x4C00-0x4EFF: Unused
+
+- 0x4F00-0x4FFF: PIH area
+- 0x5000-0xFFFF: User program space
+
+
 
 Boot sequence
 -------------
