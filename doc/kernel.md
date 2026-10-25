@@ -36,9 +36,9 @@ Memory is organized as follows:
 - 0x4C00-0x4EFF: Unused
 
 - 0x4F00-0x4FFF: PIH area
-- 0x5000-0xFFFF: User program space
+- 0x5000-0xFFFF: User program space, ~45KB
 
-
+Kernel+shell itself requires ~12KB of memory.
 
 Boot sequence
 -------------
@@ -57,29 +57,29 @@ Kernel.inc file
 This file contains kernel workspace variables and constants.
 The default location is`0x2000`.
 
-| Offset/value     | Name                 | Explanation |
-|------------------|----------------------|-------------|
-| 0x2000           | KERNEL_WORKSPACE(KW) |             |
-| KW+2             | KERNEL_SP            |             |
-| KW+4             | SHELL_SP             |             |
-| KW+6             | SYSCALL_RET          |             |
-| KW+8             | KERNEL_FLAGS         |             |
-| KW+14            | TMP_REG(1-3)         |             |
-| KW+16            | SAVED_SP             |             |
-| KW+0x100         | TTY_BUF_TAIL         |             |
-| KW+0x102         | TTY_BUF_HEAD         |             |
-| KW+0x104         | TTY_BUF_COUNT        |             |
-| KW+0x106         | TTY_BUF              |             |
-| KW+0x200         | FS_BUF               |             |
-| KW+0x400         | FS_ROOT              |             |
-| KW+0x600         | FS_BITMAP            |             |
-| KW+0x800         | FS_FENTRY            |             |
-| 0x3000           | STACK_BASE(SKB)      |             |
-| SB+0x7FF         | KERNEL_STACK(KS)     |             |
-| 0x3800           | SHELL_AREA(SHA)      |             |
-| SHA+0x1000+0x3FF | SHELL_STACK(SHS)     |             |
-| 0xFFFF           | USER_STACK           |             |
-| 0x5000           | USER_AREA            |             |
+| Offset/value     | Name                 |
+|------------------|----------------------|
+| 0x2000           | KERNEL_WORKSPACE(KW) |
+| KW+2             | KERNEL_SP            |
+| KW+4             | SHELL_SP             |
+| KW+6             | SYSCALL_RET          |
+| KW+8             | KERNEL_FLAGS         |
+| KW+14            | TMP_REG(1-3)         |
+| KW+16            | SAVED_SP             |
+| KW+0x100         | TTY_BUF_TAIL         |
+| KW+0x102         | TTY_BUF_HEAD         |
+| KW+0x104         | TTY_BUF_COUNT        |
+| KW+0x106         | TTY_BUF              |
+| KW+0x200         | FS_BUF               |
+| KW+0x400         | FS_ROOT              |
+| KW+0x600         | FS_BITMAP            |
+| KW+0x800         | FS_FENTRY            |
+| 0x3000           | STACK_BASE(SKB)      |
+| SB+0x7FF         | KERNEL_STACK(KS)     |
+| 0x3800           | SHELL_AREA(SHA)      |
+| SHA+0x1000+0x3FF | SHELL_STACK(SHS)     |
+| 0xFFFF           | USER_STACK           |
+| 0x5000           | USER_AREA            |
 
 Below is a list of kernel workspace variables and what they do:
 

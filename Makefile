@@ -114,6 +114,6 @@ testprogram:
 	./mfs-util -w -f test.asm -fd disk.img
 
 emulate:
-	$(BEMU80) --rom $(BUILDDIR)/MANUX.rom --fd disk.img
+	$(BEMU80) --rom $(BUILDDIR)/MANUX.rom -fd disk.img
 
 .PHONY: userland bemu80

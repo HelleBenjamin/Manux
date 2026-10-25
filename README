@@ -51,9 +51,11 @@ See `include/sys/` folder for currently supported functions.
 Minimum system requirements
 ===========================
 Manux supports bemu80(https://github.com/HelleBenjamin/bemu80) as the offical target machine. Manux is going to be ported to other machines in the future when the kernel becomes stable.
+Official x86(8086) port is planned.
 
+These are the current system requirements:
 - A Z80 CPU
-- 56K RAM
+- 12K RAM(for shell only), 32K is recommended minimum
 - 8K ROM
 - a serial interface
 - floppy disk or other disk interface

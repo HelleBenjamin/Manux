@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-only
  * Copyright (c) 2025-2026 Benjamin Helle
 */ 
 #include "bemu80.h"
@@ -40,10 +40,13 @@ pthread_mutex_t acia_mutex = PTHREAD_MUTEX_INITIALIZER;
 /* clock related */
 uint64_t cycles = 0;
 struct timespec cycles_time;
-int target_speed = 4000000; /* default to 4 MHz*/
+long target_speed = 4000000; /* default to 4 MHz*/
 long frame_ns;
 
-uint8_t memory[MEM_SIZE]; /* global memory */
+uint8_t* memory; /* global memory */
+
+/* for IM-instruction*/
+uint8_t im_modes[8] = {0,0,1,2,0,0,1,2};
 
 /* register functions */
 #define AF(cpu) ((cpu->regs[REG_A] << 8) | cpu->flags)
@@ -62,7 +65,7 @@ static inline void set_high(uint16_t *reg, uint8_t value) { *reg = (*reg & 0x00F
 static inline void set_low(uint16_t *reg, uint8_t value) { *reg = (*reg & 0xFF00) | (value & 0xFF); }
 
 static inline void mwrite8(uint16_t address, uint8_t value) { 
-  if (address >= MEM_SIZE || address <= rom_size) return; /* TODO: error handling */
+  if (address >= MEM_SIZE || address < rom_size) return; /* TODO: error handling */
   memory[address] = value;
 }
 
@@ -72,7 +75,7 @@ static inline uint8_t mread8(uint16_t address) {
 }
 
 static inline void mwrite16(uint16_t address, uint16_t value) {
-  if (address+1 >= MEM_SIZE || address <= rom_size) return;
+  if (address+1 >= MEM_SIZE || address < rom_size) return;
   memory[address] = value & 0xFF;
   memory[address + 1] = (value >> 8) & 0xFF;
 }
@@ -101,6 +104,85 @@ static inline uint16_t pop(VirtZ80 *cpu) {
   uint16_t result = mread16(cpu->sp);
   cpu->sp += 2;
   return result;
+}
+
+static uint8_t get_r8(VirtZ80 *cpu, uint8_t reg) {
+  return (reg == 6) ? mread8(HL(cpu)) : cpu->regs[reg];
+}
+
+static void set_r8(VirtZ80 *cpu, uint8_t reg, uint8_t val) {
+  if (reg == 6) mwrite8(HL(cpu), val);
+  else cpu->regs[reg] = val;
+}
+
+static uint8_t get_r8_index(VirtZ80 *cpu, uint8_t reg, uint16_t *index_reg) {
+  if (reg == 6) return mread8(get_index_addr(cpu, *index_reg)); /* (HL) becomes (IX/IY+d), address is calculated separately for most of functions*/
+  else if (reg == 4) return GET_HIGH(*index_reg);
+  else if (reg == 5) return GET_LOW(*index_reg);
+  return cpu->regs[reg];
+}
+
+static void set_r8_index(VirtZ80 *cpu, uint8_t reg, uint8_t val, uint16_t *index_reg) {
+  //if (reg == 6) mwrite8((*index_reg + (int8_t)fByte(cpu)), val); /* same here*/
+  if (reg == 4) set_high(index_reg, val);
+  else if (reg == 5) set_low(index_reg, val);
+  else cpu->regs[reg] = val;
+}
+
+static void set_r16_1(VirtZ80 *cpu, uint8_t reg, uint16_t val) {
+  /* BC, DE, HL, SP*/
+  if (reg == 3) cpu->sp = val; /* special case*/
+  else {
+    uint8_t reg_index = reg * 2;
+    cpu->regs[reg_index] = (val >> 8) & 0xFF;
+    cpu->regs[reg_index+1] = val & 0xFF;
+  } 
+}
+
+static void set_r16_index(VirtZ80 *cpu, uint8_t reg, uint16_t val, uint16_t *index_reg) {
+  /* BC, DE, IX/IY, SP*/
+  if (reg == 3) cpu->sp = val; /* special case*/
+  else if (reg == 2) *index_reg = val;
+  else {
+    uint8_t reg_index = reg * 2;
+    cpu->regs[reg_index] = (val >> 8) & 0xFF;
+    cpu->regs[reg_index+1] = val & 0xFF;
+  } 
+}
+
+static uint16_t get_r16_index(VirtZ80 *cpu, uint8_t reg, uint16_t *index_reg) {
+  if (reg == 3) return cpu->sp;
+  else if (reg == 2) return *index_reg;
+  else {
+    uint8_t reg_index = reg * 2;
+    return (cpu->regs[reg_index] << 8 | cpu->regs[reg_index+1]);
+  } 
+}
+
+static uint16_t get_r16_1(VirtZ80 *cpu, uint8_t reg) {
+  if (reg == 3) return cpu->sp;
+  else {
+    uint8_t reg_index = reg * 2;
+    return (cpu->regs[reg_index] << 8 | cpu->regs[reg_index+1]);
+  } 
+}
+
+static void set_r16_2(VirtZ80 *cpu, uint8_t reg, uint16_t val) {
+  /* BC, DE, HL, AF*/
+  if (reg == 3) set_af(cpu, val);
+  else {
+    uint8_t reg_index = reg * 2;
+    cpu->regs[reg_index] = (val >> 8) & 0xFF;
+    cpu->regs[reg_index+1] =  val & 0xFF;
+  } 
+}
+
+static uint16_t get_r16_2(VirtZ80 *cpu, uint8_t reg) {
+  if (reg == 3) return AF(cpu);
+  else {
+    uint8_t reg_index = reg * 2;
+    return (cpu->regs[reg_index] << 8 | cpu->regs[reg_index+1]);
+  } 
 }
 
 void* input_thread(void* arg) { /* Small simple input function */
@@ -153,7 +235,7 @@ void execute(VirtZ80 *cpu) {
       interrupt_pending = false;
     }
 
-    cycles += step_instruction(cpu);
+    cycles += step(cpu);
     if (print_ins) printf("Instruction: 0x%02x at 0x%04x | ", memory[cpu->pc], cpu->pc);
     if (print_ins) print_state(cpu);
 
@@ -807,1967 +889,1009 @@ static inline uint8_t set8(VirtZ80 *cpu, uint8_t a, uint8_t bit) {
   return (a | (1 << bit));
 }
 
-int step_instruction(VirtZ80 *cpu) {
+void op_block_instruction(VirtZ80 *cpu, uint8_t opcode) {
+  /* group x2*/
+  uint8_t y = (opcode >> 3) & 7; /* operation*/
+  uint8_t z = opcode & 7; /* op*/
+  uint8_t d = y & 1; /* direction, inc or dec*/
+  uint8_t r = (y >> 1) & 1; /* repeat*/
+
+  switch (z) {
+    case 0: {
+      /* LDI, LDD, LDIR, LDDR*/
+      mwrite8(DE(cpu), mread8(HL(cpu)));
+
+      if (d) {
+        /* decrement DE and HL*/
+        set_hl(cpu, dec16(HL(cpu))); set_de(cpu, dec16(DE(cpu)));
+      } else {
+        /* increment them*/
+        set_hl(cpu, inc16(HL(cpu))); set_de(cpu, inc16(DE(cpu)));
+      }
+      set_bc(cpu, dec16(BC(cpu))); /* decrement BC*/
+
+      setFlag(cpu, FLAG_PV, BC(cpu) != 0); /* PV = 1 if BC not zero*/
+
+      /* repeated op*/
+      if (r && BC(cpu) != 0) {
+        cpu->pc -= 2;
+        cpu->cycles += 5;
+      }
+
+      cpu->cycles += 16;
+      break;
+    }
+
+    case 1: {
+      /* CPI, CPD, CPIR, CPDR*/
+      cp8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
+
+      if (d) {
+        /* decrement HL*/
+        set_hl(cpu, dec16(HL(cpu)));
+      } else {
+        /* increment them*/
+        set_hl(cpu, inc16(HL(cpu)));
+      }
+      set_bc(cpu, dec16(BC(cpu))); /* decrement BC*/
+
+      setFlag(cpu, FLAG_PV, BC(cpu) != 0); /* PV = 1 if BC not zero*/
+
+      /* repeated op*/
+      if (r && BC(cpu) != 0 && !getFlag(cpu, FLAG_Z)) {
+        cpu->pc -= 2;
+        cpu->cycles += 5;
+      }
+
+      cpu->cycles += 16;
+      break;
+    }
+
+    case 2: {
+      /* INI, IND, INIR, INDR*/
+      mwrite8(HL(cpu), input_handler(BC(cpu)));
+
+      if (d) {
+        /* decrement HL*/
+        set_hl(cpu, dec16(HL(cpu)));
+      } else {
+        /* increment them*/
+        set_hl(cpu, inc16(HL(cpu)));
+      }
+      cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
+
+      /* repeated op*/
+      if (r && cpu->regs[REG_B] != 0) {
+        cpu->pc -= 2;
+        cpu->cycles += 5;
+      }
+
+      cpu->cycles += 16;
+      break;
+    }
+
+    case 3: {
+      /* OUTI, OUTD, OTIR, OTDR*/
+      output_handler(BC(cpu), mread8(HL(cpu)));
+
+      if (d) {
+        /* decrement HL*/
+        set_hl(cpu, dec16(HL(cpu)));
+      } else {
+        /* increment them*/
+        set_hl(cpu, inc16(HL(cpu)));
+      }
+      cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
+
+      if (r && cpu->regs[REG_B] != 0) {
+        cpu->pc -= 2;
+        cpu->cycles += 5;
+      }
+
+      cpu->cycles += 16;
+      break;
+    }
+  }
+
+}
+
+bool check_cond(uint8_t flags, uint8_t cond) {
+  switch (cond) {
+    case F_NZ: return !(flags & FLAG_Z);
+    case F_Z: return (flags & FLAG_Z);
+    case F_NC: return !(flags & FLAG_C);
+    case F_C: return (flags & FLAG_C);
+    case F_PO: return !(flags & FLAG_PV);
+    case F_PE: return (flags & FLAG_PV);
+    case F_P: return !(flags & FLAG_S);
+    case F_M: return (flags & FLAG_S);
+  }
+
+  return 0; /* false*/
+}
+
+void group_x0(VirtZ80 *cpu, uint8_t opcode) {
+  /*x is 0*/
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t p = y >> 1;
+  uint8_t q = y & 1;
+
+  switch (z) {
+    case 0: { /* z=0*/
+      if (y>=4) { /* relative jump*/
+        int8_t offset = (int8_t)fByte(cpu);
+        if (check_cond(cpu->flags, y-4)) {
+          cpu->pc += (int8_t)offset;
+          cpu->cycles += 12;
+        } else cpu->cycles += 7;
+        break;
+      }
+
+      switch (y) {
+        case 0: cpu->cycles += 4; break; /* NOP*/
+        case 1: { /* EX AF, AF'*/
+          exchange_af(cpu);
+          cpu->cycles += 4;
+          break;
+        }
+        case 2: { /* DJNZ d*/
+          cpu->regs[REG_B] = cpu->regs[REG_B] - 1;
+          int8_t reladdr = (int8_t)fByte(cpu);
+          cpu->cycles += 8;
+          if (cpu->regs[REG_B] != 0) {
+            cpu->pc += (int8_t)reladdr;
+            cpu->cycles += 5;
+          }
+          break;
+        }
+        case 3: { /* JR d*/
+          cpu->pc += (int8_t)fByte(cpu);
+          cpu->cycles += 12;
+          break;
+        }
+      }
+      break;
+    }
+
+    case 1: { /* z=1*/
+      if (q) {
+        /* ADD HL, RR*/
+        set_hl(cpu, add16(cpu, HL(cpu), get_r16_1(cpu, p)));
+        cpu->cycles += 11;
+      } else {
+        /* LD RR, nn*/
+        set_r16_1(cpu, p, fWord(cpu));
+        cpu->cycles += 10;
+      }
+      break;
+    }
+
+    case 2: { /* z=2*/
+      if (q) {
+        switch (p) {
+          case 0: { /* LD A, (BC)*/
+            cpu->regs[REG_A] = mread8(BC(cpu));
+            cpu->cycles += 7;
+            break;
+          }
+          case 1: { /* LD A, (DE)*/
+            cpu->regs[REG_A] = mread8(DE(cpu));
+            cpu->cycles += 7;
+            break;
+          }
+          case 2: { /* LD HL, (nn)*/
+            set_hl(cpu, mread16(fWord(cpu)));
+            cpu->cycles += 16;
+            break;
+          }
+          case 3: { /* LD A, (nn)*/
+            cpu->regs[REG_A] = mread8(fWord(cpu));
+            cpu->cycles += 13;
+            break;
+          }
+        }
+      } else {
+        switch (p) {
+          case 0: { /* LD (BC), A*/
+            mwrite8(BC(cpu), cpu->regs[REG_A]);
+            cpu->cycles += 7;
+            break;
+          }
+          case 1: { /* LD (DE), A*/
+            mwrite8(DE(cpu), cpu->regs[REG_A]);
+            cpu->cycles += 7;
+            break;
+          }
+          case 2: { /* LD (nn), HL*/
+            mwrite16(fWord(cpu), HL(cpu));
+            cpu->cycles += 16;
+            break;
+          }
+          case 3: { /* LD (nn), A*/
+            mwrite8(fWord(cpu), cpu->regs[REG_A]);
+            cpu->cycles += 13;
+            break;
+          }
+        }
+      }
+      break;
+    }
+
+    case 3: { /*z=3*/
+      if (q) { /* DEC rr*/ 
+        set_r16_1(cpu, p, dec16(get_r16_1(cpu, p)));
+      } else { /* INC rr*/
+        set_r16_1(cpu, p, inc16(get_r16_1(cpu, p)));
+      }
+      cpu->cycles += 6;
+      break;
+    }
+
+    case 4: { /*z=4*/
+      /* INC r*/
+      set_r8(cpu, y, inc8(cpu, get_r8(cpu, y)));
+      cpu->cycles += (y == 6) ? 11 : 4;
+      break;
+    }
+
+    case 5: { /*z=5*/
+      /* DEC r*/
+      set_r8(cpu, y, dec8(cpu, get_r8(cpu, y)));
+      cpu->cycles += (y == 6) ? 11 : 4;
+      break;
+    }
+
+    case 6: { /*z=6*/
+      /* LD r, n*/
+      set_r8(cpu, y, fByte(cpu));
+      cpu->cycles += (y == 6) ? 10 : 7;
+      break;
+    }
+
+    case 7: { /*z=7*/
+      switch (y) {
+        case 0: { /* RLCA*/
+          uint16_t result = (cpu->regs[REG_A] << 1) | (cpu->regs[REG_A] >> 7);
+          setFlag(cpu, FLAG_C, (result & 0x100) >> 8);
+          setFlag(cpu, FLAG_N | FLAG_H, 0);
+
+          cpu->regs[REG_A] = result & 0xFF;
+
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 1: { /* RRCA*/
+          uint16_t result = (cpu->regs[REG_A] >> 1) | (cpu->regs[REG_A] << 7);
+          setFlag(cpu, FLAG_C, cpu->regs[REG_A] & 0x01);
+          cpu->regs[REG_A] = result & 0xFF;
+
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 2: { /* RLA*/
+          uint16_t result = (cpu->regs[REG_A] << 1) | (cpu->flags & FLAG_C);
+          setFlag(cpu, FLAG_C, (result & 0x100) >> 8);
+          setFlag(cpu, FLAG_N | FLAG_H, 0);
+
+          cpu->regs[REG_A] = result & 0xFF;
+
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 3: { /* RRA*/
+          uint16_t result = (cpu->regs[REG_A] >> 1) | ((cpu->flags & FLAG_C) << 7);
+          setFlag(cpu, FLAG_C, cpu->regs[REG_A] & 0x01);
+          cpu->regs[REG_A] = result & 0xFF;
+
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 4: { /* DAA*/
+          /* not implemented*/
+          cpu->cycles += 4;
+          break;
+        }
+        case 5: { /* CPL*/
+          cpu->regs[REG_A] = ~cpu->regs[REG_A];
+          setFlag(cpu, FLAG_N | FLAG_H, 1);
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 6: { /* SCF*/
+          setFlag(cpu, FLAG_C, 1);
+          setFlag(cpu, FLAG_N | FLAG_H, 0);
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+        case 7: { /* CCF*/
+          setFlag(cpu, FLAG_H, getFlag(cpu, FLAG_C));
+          setFlag(cpu, FLAG_C, getFlag(cpu, FLAG_C) ^ 1);
+          setFlag(cpu, FLAG_N, 0);
+          update_flagsYX(cpu, cpu->regs[REG_A]);
+          cpu->cycles += 4;
+          break;
+        }
+      }
+      break;
+    }
+  }
+}
+
+void op_load(VirtZ80 *cpu, uint8_t opcode) {
+  /* group x1*/
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  if (y == 6 && z == 6) { /* halt case, cant do ld (hl), (hl)*/
+    cpu->halt = 1;
+    cpu->cycles += 4;
+    return;
+  } else set_r8(cpu, y, get_r8(cpu, z));
+
+  cpu->cycles += (y == 6) ? 7 : 4;
+}
+
+int op_alu(VirtZ80 *cpu, uint8_t opcode) {
+  /* group x2*/
+  uint8_t y = (opcode >> 3) & 7; /* operation*/
+  uint8_t z = opcode & 7; /* source register*/
+
+  switch (y) {
+    case 0: cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 1: cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 2: cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 3: cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 4: cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 5: cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 6: cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+    case 7: cp8(cpu, cpu->regs[REG_A], get_r8(cpu, z)); break;
+  }
+
+  cpu->cycles += (y == 6) ? 7 : 4;
+
+  return 0;
+}
+
+void group_x3(VirtZ80 *cpu, uint8_t opcode) {
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t p = y >> 1;
+  uint8_t q = y & 1;
+
+  switch (z) {
+    case 0: { /*z=0*/
+      /* RET cond*/
+      if (check_cond(cpu->flags, y)) {
+        cpu->pc = pop(cpu);
+        cpu->cycles += 11;
+      } else {
+        cpu->cycles += 5;
+      }
+      break;
+    }
+
+    case 1: { /*z=1*/
+      if (q) {
+        switch (p) {
+          case 0: { /* RET*/
+            cpu->pc = pop(cpu);
+            cpu->cycles += 10;
+            break;
+          }
+          case 1: { /* EXX*/
+            exchange(cpu, REG_BC, REG_BC, true);
+            exchange(cpu, REG_DE, REG_DE, true);
+            exchange(cpu, REG_HL, REG_HL, true);
+            cpu->cycles += 4;
+            break;
+          }
+          case 2: { /* JP (HL)*/
+            cpu->pc = HL(cpu);
+            cpu->cycles += 4;
+            break;
+          }
+          case 3: { /* LD SP, HL*/
+            cpu->sp = HL(cpu);
+            cpu->cycles += 6;
+            break;
+          }
+        }
+      } else { /* POP rp2*/
+        set_r16_2(cpu, p, pop(cpu));
+        cpu->cycles += 10;
+        break;
+      }
+      break;
+    }
+
+    case 2: { /*z=2*/
+      /* JP c, nn*/
+      uint16_t addr = fWord(cpu);
+      if (check_cond(cpu->flags, y)) {
+        cpu->pc = addr;
+      }
+      cpu->cycles += 10;
+      break;
+    }
+
+    case 3: { /*z=3*/
+      switch (y) {
+        case 0: { /* JP nn*/
+          cpu->pc = fWord(cpu);
+          cpu->cycles += 10;
+          break;
+        }
+        case 1: { /* CB prefix, bit instructions*/
+          prefix_cb(cpu);
+          break;
+        }
+        case 2: { /* OUT (n), A*/
+          output_handler(fByte(cpu), cpu->regs[REG_A]);
+          cpu->cycles += 11;
+          break;
+        }
+        case 3: { /* IN A, (n)*/
+          cpu->regs[REG_A] = input_handler(fByte(cpu));
+          cpu->cycles += 11;
+          break;
+        }
+        case 4: { /* EX (SP), HL*/
+          cpu->wz = HL(cpu);
+          set_hl(cpu, mread16(cpu->sp));
+          mwrite16(cpu->sp, cpu->wz);
+          cpu->cycles += 19;
+          break;
+        }
+        case 5: { /* EX DE,HL*/
+          exchange(cpu, REG_DE, REG_HL, false);
+          cpu->cycles += 4;
+          break;
+        }
+        case 6: { /* DI*/
+          cpu->iff1 = 0;
+          cpu->iff2 = 0;
+          cpu->cycles += 4;
+          break;
+        }
+        case 7: { /* EI*/
+          cpu->iff1 = 1;
+          cpu->iff2 = 1;
+          cpu->cycles += 4;
+          break;
+        }
+      }
+      break;
+    }
+
+    case 4: { /*z=4*/
+      /* CALL c, nn*/
+      uint16_t addr = fWord(cpu);
+      if (check_cond(cpu->flags, y)) {
+        push(cpu, cpu->pc);
+        cpu->pc = addr;
+        cpu->cycles += 17;
+      } else {
+        cpu->cycles += 10;
+      }
+      break;
+    }
+
+    case 5: { /*z=5*/
+      if (q) {
+        switch (p) {
+          case 0: { /* CALL nn*/
+            uint16_t addr = fWord(cpu);
+            push(cpu, cpu->pc);
+            cpu->pc = addr;
+            cpu->cycles += 17;
+            break;
+          }
+          case 1: { /* DD prefix, index IX*/
+            //index_instruction(cpu, &cpu->ix);
+            prefix_dd_fd(cpu, &cpu->ix);
+            break;
+          }
+          case 2: { /* ED prefix, misc ins.*/
+            prefix_ed(cpu); //misc_instruction(cpu);
+            break;
+          }
+          case 3: { /* FD prefix, index IY*/
+            //index_instruction(cpu, &cpu->iy);
+            prefix_dd_fd(cpu, &cpu->iy);
+            break; 
+          }
+        }
+      } else {
+        /* PUSH rr2*/
+        push(cpu, get_r16_2(cpu, p));
+        cpu->cycles += 11;
+      }
+      break;
+    }
+
+    case 6: { /*z=6*/
+      /* ALU n*/
+      uint8_t imm8 = fByte(cpu);
+      switch (y) {
+        case 0: cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], imm8); break;
+        case 1: cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], imm8); break;
+        case 2: cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], imm8); break;
+        case 3: cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], imm8); break;
+        case 4: cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], imm8); break;
+        case 5: cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], imm8); break;
+        case 6: cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], imm8); break;
+        case 7: cp8(cpu, cpu->regs[REG_A], imm8); break;
+      }
+      cpu->cycles += 7;
+      break;
+    }
+
+    case 7: { /*z=7*/
+      /* RST y*8*/
+      push(cpu, cpu->pc);
+      cpu->pc = y*8;
+      cpu->cycles += 11;
+      break;
+    }
+  }
+}
+
+static void inline dispatch(VirtZ80 *cpu, uint8_t opcode) {
+  /* execute opcode without fetching from memory*/
+  switch (opcode >> 6) {
+    case 0: group_x0(cpu, opcode); break;
+    case 1: op_load(cpu, opcode); break;
+    case 2: op_alu(cpu, opcode); break;
+    case 3: group_x3(cpu, opcode); break;
+  }
+}
+
+int step(VirtZ80 *cpu) {
   uint8_t opcode = fByte(cpu);
-  int8_t reladdr = 0;
   uint64_t old_cycles = cpu->cycles; /* Hold previous cycles*/
   cpu->r = (cpu->r + 1) & 0x7F; /* Increment the refresh register*/
-  switch (opcode) {
-    case 0x00: // NOP
-      cpu->cycles += 4;
-      break;
-    case 0x01: // LD BC, nn
-      set_bc(cpu, fWord(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0x02: // LD (BC), A
-      mwrite8(BC(cpu), cpu->regs[REG_A]);
-      cpu->cycles += 7;
-      break;
-    case 0x03: // INC BC
-      set_bc(cpu, inc16(BC(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x04: // INC B
-      cpu->regs[REG_B] = inc8(cpu, cpu->regs[REG_B]);
-      cpu->cycles += 4;
-      break;
-    case 0x05: // DEC B
-      cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      cpu->cycles += 4;
-      break;
-    case 0x06: // LD B, n
-      cpu->regs[REG_B] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x07: // RLCA
-      { /* Dirty way to do this */
-        uint16_t result = (cpu->regs[REG_A] << 1) | (cpu->regs[REG_A] >> 7);
-        setFlag(cpu, FLAG_C, (result & 0x100) >> 8);
-        setFlag(cpu, FLAG_N | FLAG_H, 0);
-
-        cpu->regs[REG_A] = result & 0xFF;
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
-      }
-      cpu->cycles += 4;
-      break;
-    case 0x08: // EX AF, AF'
-      exchange_af(cpu);
-      cpu->cycles += 4;
-      break;
-    case 0x09: // ADD HL, BC
-      set_hl(cpu, add16(cpu, HL(cpu), BC(cpu)));
-      cpu->cycles += 11;
-      break;
-    case 0x0A: // LD A, (BC)
-      cpu->regs[REG_A] = mread8(BC(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0x0B: // DEC BC
-      set_bc(cpu, dec16(BC(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x0C: // INC C
-      cpu->regs[REG_C] = inc8(cpu, cpu->regs[REG_C]);
-      cpu->cycles += 4;
-      break;
-    case 0x0D: // DEC C
-      cpu->regs[REG_C] = dec8(cpu, cpu->regs[REG_C]);
-      cpu->cycles += 4;
-      break;
-    case 0x0E: // LD C, n
-      cpu->regs[REG_C] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x0F: // RRCA
-      {
-        uint16_t result = (cpu->regs[REG_A] >> 1) | (cpu->regs[REG_A] << 7);
-        setFlag(cpu, FLAG_C, cpu->regs[REG_A] & 0x01);
-        cpu->regs[REG_A] = result & 0xFF;
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
-        cpu->cycles += 4;
-      }
-      break;
-    case 0x10: // DJNZ d
-      cpu->regs[REG_B] = cpu->regs[REG_B] - 1;
-      reladdr = (int8_t)fByte(cpu);
-      cpu->cycles += 8;
-      if (cpu->regs[REG_B] != 0) {
-        cpu->pc += (int8_t)reladdr; /* Treat as signed */
-        cpu->cycles += 5;
-      }
-      break;
-    case 0x11: // LD DE, nn
-      set_de(cpu, fWord(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0x12: // LD (DE), A
-      mwrite8(DE(cpu), cpu->regs[REG_A]);
-      cpu->cycles += 7;
-      break;
-    case 0x13: // INC DE
-      set_de(cpu, inc16(DE(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x14: // INC D
-      cpu->regs[REG_D] = inc8(cpu, cpu->regs[REG_D]);
-      cpu->cycles += 4;
-      break;
-    case 0x15: // DEC D
-      cpu->regs[REG_D] = dec8(cpu, cpu->regs[REG_D]);
-      cpu->cycles += 4;
-      break;
-    case 0x16: // LD D, n
-      cpu->regs[REG_D] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x17: // RLA
-      {
-        uint16_t result = (cpu->regs[REG_A] << 1) | (cpu->flags & FLAG_C);
-        setFlag(cpu, FLAG_C, (result & 0x100) >> 8);
-        setFlag(cpu, FLAG_N | FLAG_H, 0);
-
-        cpu->regs[REG_A] = result & 0xFF;
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
-      }
-      cpu->cycles += 4;
-      break;
-    case 0x18: // JR d
-      cpu->pc += (int8_t)fByte(cpu);
-      cpu->cycles += 12;
-      break;
-    case 0x19: // ADD HL, DE
-      set_hl(cpu, add16(cpu, HL(cpu), DE(cpu)));
-      cpu->cycles += 11;
-      break;
-    case 0x1A: // LD A, (DE)
-      cpu->regs[REG_A] = mread8(DE(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0x1B: // DEC DE
-      set_de(cpu, dec16(DE(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x1C: // INC E
-      cpu->regs[REG_E] = inc8(cpu, cpu->regs[REG_E]);
-      cpu->cycles += 4;
-      break;
-    case 0x1D: // DEC E
-      cpu->regs[REG_E] = dec8(cpu, cpu->regs[REG_E]);
-      cpu->cycles += 4;
-      break;
-    case 0x1E: // LD E, n
-      cpu->regs[REG_E] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x1F: // RRA
-      {
-        uint16_t result = (cpu->regs[REG_A] >> 1) | ((cpu->flags & FLAG_C) << 7);
-        setFlag(cpu, FLAG_C, cpu->regs[REG_A] & 0x01);
-        cpu->regs[REG_A] = result & 0xFF;
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
-      }
-      cpu->cycles += 4;
-      break;
-    case 0x20: // JR NZ, d
-      reladdr = (int8_t)fByte(cpu);
-      cpu->cycles += 7;
-      if (getFlag(cpu, FLAG_Z) == 0) {
-        cpu->pc += (int8_t)reladdr;
-        cpu->cycles += 5;
-      }
-      break;
-    case 0x21: // LD HL, nn
-      set_hl(cpu, fWord(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0x22: // LD (nn), HL
-      mwrite16(fWord(cpu), HL(cpu));
-      cpu->cycles += 16;
-      break;
-    case 0x23: // INC HL
-      set_hl(cpu, inc16(HL(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x24: // INC H
-      cpu->regs[REG_H] = inc8(cpu, cpu->regs[REG_H]);
-      cpu->cycles += 4;
-      break;
-    case 0x25: // DEC H
-      cpu->regs[REG_H] = dec8(cpu, cpu->regs[REG_H]);
-      cpu->cycles += 4;
-      break;
-    case 0x26: // LD H, n
-      cpu->regs[REG_H] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x27: // DAA
-      // TODO
-      cpu->cycles += 4;
-      break;
-    case 0x28: // JR Z, d
-      reladdr = (int8_t)fByte(cpu);
-      cpu->cycles += 7;
-      if (getFlag(cpu, FLAG_Z) == 1) {
-        cpu->pc += (int8_t)reladdr;
-        cpu->cycles += 5;
-      }
-      break;
-    case 0x29: // ADD HL, HL
-      set_hl(cpu, add16(cpu, HL(cpu), HL(cpu)));
-      cpu->cycles += 11;
-      break;
-    case 0x2A: // LD HL, (nn)
-      set_hl(cpu, mread16(fWord(cpu)));
-      cpu->cycles += 16;
-      break;
-    case 0x2B: // DEC HL
-      set_hl(cpu, dec16(HL(cpu)));
-      cpu->cycles += 6;
-      break;
-    case 0x2C: // INC L
-      cpu->regs[REG_L] = inc8(cpu, cpu->regs[REG_L]);
-      cpu->cycles += 4;
-      break;
-    case 0x2D: // DEC L
-      cpu->regs[REG_L] = dec8(cpu, cpu->regs[REG_L]);
-      cpu->cycles += 4;
-      break;
-    case 0x2E: // LD L, n
-      cpu->regs[REG_L] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x2F: // CPL
-      cpu->regs[REG_A] = ~cpu->regs[REG_A];
-      setFlag(cpu, FLAG_N | FLAG_H, 1);
-      update_flagsYX(cpu, cpu->regs[REG_A]);
-      cpu->cycles += 4;
-      break;
-    case 0x30: // JR NC, d
-      reladdr = (int8_t)fByte(cpu);
-      cpu->cycles += 7;
-      if (getFlag(cpu, FLAG_C) == 0) {
-        cpu->pc += (int8_t)reladdr;
-        cpu->cycles += 5;
-        break;
-      }
-      break;
-    case 0x31: // LD SP, nn
-      cpu->sp = fWord(cpu);
-      cpu->cycles += 10;
-      break;
-    case 0x32: // LD (nn), A
-      mwrite8(fWord(cpu), cpu->regs[REG_A]);
-      cpu->cycles += 13;
-      break;
-    case 0x33: // INC SP
-      cpu->sp += 1;
-      cpu->cycles += 6;
-      break;
-    case 0x34: // INC (HL)
-      mwrite8(HL(cpu), inc8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 11;
-      break;
-    case 0x35: // DEC (HL)
-      mwrite8(HL(cpu), dec8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 11;
-      break;
-    case 0x36: // LD (HL), n
-      mwrite8(HL(cpu), fByte(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0x37: // SCF
-      setFlag(cpu, FLAG_C, 1);
-      setFlag(cpu, FLAG_N | FLAG_H, 0);
-      update_flagsYX(cpu, cpu->regs[REG_A]);
-      cpu->cycles += 4;
-      break;
-    case 0x38: // JR C, d
-      reladdr = (int8_t)fByte(cpu);
-      cpu->cycles += 7;
-      if (getFlag(cpu, FLAG_C) == 1) {
-        cpu->pc += (int8_t)reladdr;
-        cpu->cycles += 5;
-      }
-      break;
-    case 0x39: // ADD HL, SP
-      set_hl(cpu, add16(cpu, HL(cpu), cpu->sp));
-      cpu->cycles += 11;
-      break;
-    case 0x3A: // LD A, (nn)
-      cpu->regs[REG_A] = mread8(fWord(cpu));
-      cpu->cycles += 13;
-      break;
-    case 0x3B: // DEC SP
-      cpu->sp -= 1;
-      cpu->cycles += 6;
-      break;
-    case 0x3C: // INC A
-      cpu->regs[REG_A] = inc8(cpu, cpu->regs[REG_A]);
-      cpu->cycles += 4;
-      break;
-    case 0x3D: // DEC A
-      cpu->regs[REG_A] = dec8(cpu, cpu->regs[REG_A]);
-      cpu->cycles += 4;
-      break;
-    case 0x3E: // LD A, n
-      cpu->regs[REG_A] = fByte(cpu);
-      cpu->cycles += 7;
-      break;
-    case 0x3F: // CCF
-      setFlag(cpu, FLAG_H, getFlag(cpu, FLAG_C));
-      setFlag(cpu, FLAG_C, getFlag(cpu, FLAG_C) ^ 1);
-      setFlag(cpu, FLAG_N, 0);
-      update_flagsYX(cpu, cpu->regs[REG_A]);
-      cpu->cycles += 4;
-      break;
-    case 0x40: /*LD B, reg */
-    case 0x41:
-    case 0x42: 
-    case 0x43:
-    case 0x44:
-    case 0x45:
-    case 0x47:
-      cpu->regs[REG_B] = cpu->regs[opcode & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x46: // LD B, (HL)
-      cpu->regs[REG_B] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0x48: // LD C, reg
-    case 0x49:
-    case 0x4A:
-    case 0x4B:
-    case 0x4C:
-    case 0x4D:
-    case 0x4F:
-      cpu->regs[REG_C] = cpu->regs[(opcode-8) & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x4E: // LD C, (HL)
-      cpu->regs[REG_C] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x50: // LD D, reg
-    case 0x51:
-    case 0x52:
-    case 0x53:
-    case 0x54:
-    case 0x55:
-    case 0x57:
-      cpu->regs[REG_D] = cpu->regs[opcode & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x56: // LD D, (HL)
-      cpu->regs[REG_D] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x58: // LD E, reg
-    case 0x59:
-    case 0x5A:
-    case 0x5B:
-    case 0x5C:
-    case 0x5D:
-    case 0x5F:
-      cpu->regs[REG_E] = cpu->regs[(opcode-8) & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x5E: // LD E, (HL)
-      cpu->regs[REG_E] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x60: // LD H, reg
-    case 0x61:
-    case 0x62:
-    case 0x63:
-    case 0x64:
-    case 0x65:
-    case 0x67:
-      cpu->regs[REG_H] = cpu->regs[opcode & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x66: // LD H, (HL)
-      cpu->regs[REG_H] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x68: // LD L, reg
-    case 0x69:
-    case 0x6A:
-    case 0x6B:
-    case 0x6C:
-    case 0x6D:
-    case 0x6F:
-      cpu->regs[REG_L] = cpu->regs[(opcode-8) & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x6E: // LD L, (HL)
-      cpu->regs[REG_L] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x70: // LD (HL), reg
-    case 0x71:
-    case 0x72:
-    case 0x73:
-    case 0x74:
-    case 0x75:
-    case 0x77:
-      mwrite8(HL(cpu), cpu->regs[opcode & 0x07]);
-      cpu->cycles += 7;
-      break;
-
-    case 0x76: // HALT
-      cpu->halt = true;
-      cpu->pc--; /* Don't increment PC*/
-      cpu->cycles += 4;
-      break;
-
-    case 0x78: // LD A, reg
-    case 0x79:
-    case 0x7A:
-    case 0x7B:
-    case 0x7C:
-    case 0x7D:
-    case 0x7F:
-      cpu->regs[REG_A] = cpu->regs[(opcode-8) & 0x07];
-      cpu->cycles += 4;
-      break;
-    case 0x7E: // LD A, (HL)
-      cpu->regs[REG_A] = mread8(HL(cpu));
-      cpu->cycles += 7;
-      break;
-
-    case 0x80: // ADD A, reg
-    case 0x81:
-    case 0x82:
-    case 0x83:
-    case 0x84:
-    case 0x85:
-    case 0x87:
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0x86: // ADD A, (HL)
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0x88: // ADC A, reg
-    case 0x89:
-    case 0x8A:
-    case 0x8B:
-    case 0x8C:
-    case 0x8D:
-    case 0x8F:
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0x8E: // ADC A, (HL)
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0x90: // SUB A, reg
-    case 0x91:
-    case 0x92:
-    case 0x93:
-    case 0x94:
-    case 0x95:
-    case 0x97:
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0x96: // SUB A, (HL)
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0x98: // SBC A, reg
-    case 0x99:
-    case 0x9A:
-    case 0x9B:
-    case 0x9C:
-    case 0x9D:
-    case 0x9F:
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0x9E: // SBC A, (HL)
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0xA0: // AND A, reg
-    case 0xA1:
-    case 0xA2:
-    case 0xA3:
-    case 0xA4:
-    case 0xA5:
-    case 0xA7:
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0xA6: // AND A, (HL)
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0xA8: // XOR A, reg
-    case 0xA9:
-    case 0xAA:
-    case 0xAB:
-    case 0xAC:
-    case 0xAD:
-    case 0xAF:
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0xAE: // XOR A, (HL)
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0xB0: // OR A, reg
-    case 0xB1:
-    case 0xB2:
-    case 0xB3:
-    case 0xB4:
-    case 0xB5:
-    case 0xB7:
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 4;
-      break;
-    case 0xB6: // OR A, (HL)
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-
-    case 0xB8: // CP A, reg
-    case 0xB9:
-    case 0xBA:
-    case 0xBB:
-    case 0xBC:
-    case 0xBD:
-    case 0xBF:
-      cp8(cpu, cpu->regs[REG_A], cpu->regs[((opcode-8) & 0x07)]); /* Same as sub, but doesn't modify A */
-      cpu->cycles += 4;
-      break;
-    case 0xBE: // CP A, (HL)
-      cp8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      cpu->cycles += 7;
-      break;
-    
-    case 0xC0: // RET NZ
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_Z) == 0) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xC1: // POP BC
-      set_bc(cpu, pop(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0xC2: // JP NZ, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_Z) == 0) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xC3: // JP nn
-      cpu->wz = fWord(cpu);
-      cpu->pc = cpu->wz;
-      cpu->cycles += 10;
-      break;
-    case 0xC4: // CALL NZ, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_Z) == 0) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xC5: // PUSH BC
-      push(cpu, BC(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0xC6: // ADD A, n
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xC7: // RST 0h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x00;
-      cpu->cycles += 11;
-      break;
-    case 0xC8: // RET Z
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_Z)) {
-        cpu->pc = pop(cpu);
-        break;
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xC9: // RET
-      cpu->pc = pop(cpu);
-      cpu->cycles += 10;
-      break;
-    case 0xCA: // JP Z, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_Z)) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xCB: // Bit instruction
-      bit_instruction(cpu);
-      break;
-    case 0xCC: // CALL Z, nn
-      cpu->cycles += 10;
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_Z)) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xCD: // CALL nn
-      cpu->wz = fWord(cpu);
-      push(cpu, cpu->pc);
-      cpu->pc = cpu->wz;
-      cpu->cycles += 17;
-      break;
-    case 0xCE: // ADC A, n
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xCF: // RST 8h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x08;
-      cpu->cycles += 11;
-      break;
-    case 0xD0: // RET NC
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_C) == 0) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xD1: // POP DE
-      set_de(cpu, pop(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0xD2: // JP NC, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_C) == 0) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xD3: // OUT (n), A
-      output_handler(fByte(cpu), cpu->regs[REG_A]);
-      cpu->cycles += 11;
-      break;
-    case 0xD4: // CALL NC, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_C) == 0) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xD5: // PUSH DE
-      push(cpu, DE(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0xD6: // SUB A, n
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xD7: // RST 10h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x10;
-      cpu->cycles += 11;
-      break;
-    case 0xD8: // RET C
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_C)) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xD9: // EXX
-      exchange(cpu, REG_BC, REG_BC, true);
-      exchange(cpu, REG_DE, REG_DE, true);
-      exchange(cpu, REG_HL, REG_HL, true);
-      cpu->cycles += 4;
-      break;
-    case 0xDA: // JP C, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_C)) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xDB: // IN A, (n)
-      cpu->regs[REG_A] = input_handler(fByte(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0xDC: // CALL C, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_C)) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xDD: // IX Prefix
-      index_instruction(cpu, &cpu->ix);
-      break;
-    case 0xDE: // SBC A, n
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xDF: // RST 18h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x18;
-      cpu->cycles += 11;
-      break;
-    case 0xE0: // RET PO
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_PV) == 0) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xE1: // POP HL
-      set_hl(cpu, pop(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0xE2: // JP PO, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_PV) == 0) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xE3: // EX (SP),HL
-      cpu->wz = HL(cpu);
-      set_hl(cpu, mread16(cpu->sp));
-      mwrite16(cpu->sp, cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0xE4: // CALL PO, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_PV) == 0) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xE5: // PUSH HL
-      push(cpu, HL(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0xE6: // AND A, n
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xE7: // RST 20h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x20;
-      cpu->cycles += 11;
-      break;
-    case 0xE8: // RET PE
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_PV)) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xE9: // JP (HL)
-      cpu->pc = HL(cpu);
-      cpu->cycles += 4;
-      break;
-    case 0xEA: // JP PE, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_PV)) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xEB: // EX DE,HL
-      exchange(cpu, REG_DE, REG_HL, false);
-      cpu->cycles += 4;
-      break;
-    case 0xEC: // CALL PE, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_PV)) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xED: // Misc. Instructions
-      misc_instruction(cpu);
-      break;
-    case 0xEE: // XOR A, n
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xEF: // RST 28h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x28;
-      cpu->cycles += 11;
-      break;
-    case 0xF0: // RET P
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_S) == 0) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xF1: // POP AF
-      set_af(cpu, pop(cpu));
-      cpu->cycles += 10;
-      break;
-    case 0xF2: // JP P, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_S) == 0) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xF3: // DI
-      cpu->iff1 = 0;
-      cpu->iff2 = 0;
-      cpu->cycles += 4;
-      break;
-    case 0xF4: // CALL P, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_S) == 0) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xF5: // PUSH AF
-      push(cpu, AF(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0xF6: // OR A, n
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xF7: // RST 30h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x30;
-      break;
-    case 0xF8: // RET M
-      cpu->cycles += 5;
-      if (getFlag(cpu, FLAG_S)) {
-        cpu->pc = pop(cpu);
-        cpu->cycles += 6;
-      }
-      break;
-    case 0xF9: // LD SP, HL
-      cpu->sp = HL(cpu);
-      cpu->cycles += 6;
-      break;
-    case 0xFA: // JP M, nn
-      cpu->wz = fWord(cpu);
-      if (getFlag(cpu, FLAG_S)) {
-        cpu->pc = cpu->wz;
-      }
-      cpu->cycles += 10;
-      break;
-    case 0xFB: // EI
-      cpu->iff1 = 1;
-      cpu->iff2 = 1;
-      cpu->cycles += 4;
-      break;
-    case 0xFC: // CALL M, nn
-      cpu->wz = fWord(cpu);
-      cpu->cycles += 10;
-      if (getFlag(cpu, FLAG_S)) {
-        push(cpu, cpu->pc);
-        cpu->pc = cpu->wz;
-        cpu->cycles += 7;
-      }
-      break;
-    case 0xFD: // IY Prefix
-      index_instruction(cpu, &cpu->iy);
-      break;
-    case 0xFE: // CP A, n
-      cp8(cpu, cpu->regs[REG_A], fByte(cpu));
-      cpu->cycles += 7;
-      break;
-    case 0xFF: // RST 38h
-      push(cpu, cpu->pc);
-      cpu->pc = 0x38;
-      cpu->cycles += 11;
-      break;
-    default:
-      break;
-  }
+  dispatch(cpu, opcode);
   return cpu->cycles-old_cycles; /* Return the number of cycles used*/
 }
 
-void misc_instruction(VirtZ80 *cpu) {
+void prefix_ed(VirtZ80 *cpu) {
   uint8_t opcode = fByte(cpu);
-  uint8_t temp1 = 0;
-  if (print_ins) printf("0xED Instruction: 0x%02x\n", opcode);
-  switch (opcode) {
-    case 0x40: // IN B, (C)
-      cpu->regs[REG_B] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x41: // OUT (C), B
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_B]);
-      cpu->cycles += 12;
-      break;
-    case 0x42: // SBC HL, BC
-      set_hl(cpu, sbc16(cpu, HL(cpu), BC(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x43: // LD (nn), BC
-      mwrite16(fWord(cpu), BC(cpu));
-      cpu->cycles += 20;
-      break;
-    case 0x44: // NEG
-      cpu->regs[REG_A] = sub8(cpu, 0, cpu->regs[REG_A]);
-      cpu->cycles += 8;
-      break;
-    case 0x45: // RETN
-      cpu->pc = pop(cpu);
-      cpu->iff1 = cpu->iff2;
-      cpu->cycles += 14;
-      break;
-    case 0x46: // IM 0
-      cpu->im = 0;
-      cpu->cycles += 8;
-      break;
-    case 0x47: // LD I, A
-      cpu->i = cpu->regs[REG_A];
-      cpu->cycles += 9;
-      break;
-    case 0x48: // IN C, (C)
-      cpu->regs[REG_C] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x49: // OUT (C), C
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x4A: // ADC HL, BC
-      set_hl(cpu, adc16(cpu, HL(cpu), BC(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x4B: // LD BC, (nn)
-      set_bc(cpu, mread16(fWord(cpu)));
-      cpu->cycles += 20;
-      break;
-    case 0x4D: // RETI
-      cpu->pc = pop(cpu);
-      cpu->cycles += 14;
-      break;
-    case 0x4F: // LD R, A
-      cpu->r = cpu->regs[REG_A];
-      cpu->cycles += 9;
-      break;
-    case 0x50: // IN D, (C)
-      cpu->regs[REG_D] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x51: // OUT (C), D
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_D]);
-      cpu->cycles += 12;
-      break;
-    case 0x52: // SBC HL, DE
-      set_hl(cpu, sbc16(cpu, HL(cpu), DE(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x53: // LD (nn), DE
-      mwrite16(fWord(cpu), DE(cpu));
-      cpu->cycles += 20;
-      break;
-    case 0x56: // IM 1
-      cpu->im = 1;
-      cpu->cycles += 8;
-      break;
-    case 0x57: // LD A, I
-      cpu->regs[REG_A] = cpu->i;
-      setFlag(cpu, FLAG_S, cpu->i & 0x80);
-      setFlag(cpu, FLAG_Z, cpu->i == 0);
-      setFlag(cpu, FLAG_N | FLAG_H, 0);
-      setFlag(cpu, FLAG_PV, cpu->iff2);
-      cpu->cycles += 9;
-      break;
-    case 0x58: // IN E, (C)
-      cpu->regs[REG_E] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x59: // OUT (C), E
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_E]);
-      cpu->cycles += 12;
-      break;
-    case 0x5A: // ADC HL, DE
-      set_hl(cpu, adc16(cpu, HL(cpu), DE(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x5B: // LD DE, (nn)
-      cpu->wz = fWord(cpu);
-      set_de(cpu, mread16(cpu->wz));
-      cpu->cycles += 20;
-      break;
-    case 0x5E: // IM 2
-      cpu->im = 2;
-      cpu->cycles += 8;
-      break;
-    case 0x5F: // LD A, R
-      cpu->regs[REG_A] = cpu->r;
-      setFlag(cpu, FLAG_S, cpu->r & 0x80);
-      setFlag(cpu, FLAG_Z, cpu->r == 0);
-      setFlag(cpu, FLAG_N | FLAG_H, 0);
-      setFlag(cpu, FLAG_PV, cpu->iff2);
-      cpu->cycles += 9;
-      break;
-    case 0x60: // IN H, (C)
-      cpu->regs[REG_H] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x61: // OUT (C), H
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_H]);
-      cpu->cycles += 12;
-      break;
-    case 0x62: // SBC HL, HL
-      set_hl(cpu, sbc16(cpu, HL(cpu), HL(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x63: // LD (nn), HL
-      mwrite16(fWord(cpu), HL(cpu));
-      cpu->cycles += 20;
-      break;
-    case 0x67: // RRD
-      {
-        temp1 = mread8(HL(cpu));
-        uint8_t temp_a = cpu->regs[REG_A];
-        cpu->regs[REG_A] = (temp_a & 0xF0) | (temp1 & 0x0F);
-        mwrite8(HL(cpu), (temp1 >> 4) | ((temp_a & 0x0F) << 4));
+  uint8_t x = opcode >> 6;
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t p = y >> 1;
+  uint8_t q = y & 1;
 
-        uint8_t new_f = 0;
-
-        if (cpu->regs[REG_A] & 0x80) new_f |= FLAG_S;
-        if (cpu->regs[REG_A] == 0) new_f |= FLAG_Z;
-        if (__builtin_parity(cpu->regs[REG_A]) == 0) new_f |= FLAG_PV;
-
-        cpu->flags = (cpu->flags & ~(FLAG_S | FLAG_Z | FLAG_PV)) | new_f;
-        setFlag(cpu, FLAG_N | FLAG_H, 0);
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
+  if (x == 1) {
+    switch (z) {
+      case 0: { /*z=0*/
+        /* IN r, (C)*/
+        /* Doesn't update flags, TODO*/
+        if (y != 6) set_r8(cpu, y, input_handler(BC(cpu)));
+        /* y == 6 doesn't read to anything*/
+        cpu->cycles += 12;
+        break;
       }
-      cpu->cycles += 18;
-      break;
-    case 0x68: // IN L, (C)
-      cpu->regs[REG_L] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x69: // OUT (C), L
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_L]);
-      cpu->cycles += 12;
-      break;
-    case 0x6A: // ADC HL, HL
-      set_hl(cpu, adc16(cpu, HL(cpu), HL(cpu)));
-      cpu->cycles += 15;
-      break;
-    case 0x6B: // LD HL, (nn)
-      set_hl(cpu, mread16(fWord(cpu)));
-      cpu->cycles += 20;
-      break;
-    case 0x6F: // RLD
-      {
-        temp1 = mread8(HL(cpu));
-        uint8_t temp_a = cpu->regs[REG_A];
-        cpu->regs[REG_A] = (temp_a & 0xF0) | (temp1 >> 4);
-        mwrite8(HL(cpu), (temp1 << 4) | (temp_a & 0x0F));
 
-        uint8_t new_f = 0;
-
-        if (cpu->regs[REG_A] & 0x80) new_f |= FLAG_S;
-        if (cpu->regs[REG_A] == 0) new_f |= FLAG_Z;
-        if (__builtin_parity(cpu->regs[REG_A]) == 0) new_f |= FLAG_PV;
-
-        cpu->flags = (cpu->flags & ~(FLAG_S | FLAG_Z | FLAG_PV)) | new_f;
-        setFlag(cpu, FLAG_N | FLAG_H, 0);
-
-        update_flagsYX(cpu, cpu->regs[REG_A]);
+      case 1: { /*z=1*/
+        /* OUT (C), r*/
+        if (y != 6) output_handler(BC(cpu), get_r8(cpu, y));
+        else output_handler(BC(cpu), 0); /* Mimic NMOS behavior, can be 255 for the CMOS version*/
+        cpu->cycles += 12;
+        break;
       }
-      cpu->cycles += 18;
-      break;
-    case 0x71: // OUT (C), 0
-      output_handler(cpu->regs[REG_C], 0);
-      cpu->cycles += 12;
-      break;
-    case 0x72: // SBC HL, SP
-      set_hl(cpu, sbc16(cpu, HL(cpu), cpu->sp));
-      cpu->cycles += 15;
-      break;
-    case 0x73: // LD (nn), SP
-      mwrite16(fWord(cpu), cpu->sp);
-      cpu->cycles += 20;
-      break;
-    case 0x78: // IN A, (C)
-      cpu->regs[REG_A] = input_handler(cpu->regs[REG_C]);
-      cpu->cycles += 12;
-      break;
-    case 0x79: // OUT (C), A
-      output_handler(cpu->regs[REG_C], cpu->regs[REG_A]);
-      cpu->cycles += 12;
-      break;
-    case 0x7A: // ADC HL, SP
-      set_hl(cpu, adc16(cpu, HL(cpu), cpu->sp));
-      cpu->cycles += 15;
-      break;
-    case 0x7B: // LD SP, (nn)
-      cpu->sp = mread16(fWord(cpu));
-      cpu->cycles += 20;
-      break;
-    case 0xA0: // LDI
-      mwrite8(DE(cpu), mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); set_de(cpu, inc16(DE(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xA1: // CPI
-      sub8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xA2: // INI
-      mwrite8(HL(cpu), input_handler(cpu->regs[REG_C]));
-      set_hl(cpu, inc16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xA3: // OUTI
-      output_handler(cpu->regs[REG_C], mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xA8: // LDD
-      mwrite8(DE(cpu), mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); set_de(cpu, dec16(DE(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xA9: // CPD
-      sub8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xAA: // IND
-      mwrite8(HL(cpu), input_handler(cpu->regs[REG_C]));
-      set_hl(cpu, dec16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xAB: // OUTD
-      output_handler(cpu->regs[REG_C], mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] == 0) {
-        setFlag(cpu, FLAG_PV, 0);
-      } else setFlag(cpu, FLAG_PV, 1);
-      cpu->cycles += 16;
-      break;
-    case 0xB0: // LDIR
-      mwrite8(DE(cpu), mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); set_de(cpu, inc16(DE(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xB1: // CPIR
-      sub8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if ((BC(cpu) != 0) && !(getFlag(cpu, FLAG_Z))) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xB2: // INIR
-      mwrite8(HL(cpu), input_handler(cpu->regs[REG_C]));
-      set_hl(cpu, inc16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xB3: // OTIR
-      output_handler(cpu->regs[REG_C], mread8(HL(cpu)));
-      set_hl(cpu, inc16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xB8: // LDDR
-      mwrite8(DE(cpu), mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); set_de(cpu, dec16(DE(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xB9: // CPDR
-      sub8(cpu, cpu->regs[REG_A], mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); set_bc(cpu, dec16(BC(cpu)));
-      if (BC(cpu) != 0 && !(getFlag(cpu, FLAG_Z))) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xBA: // INDR
-      mwrite8(HL(cpu), input_handler(cpu->regs[REG_C]));
-      set_hl(cpu, dec16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    case 0xBB: // OTDR
-      output_handler(cpu->regs[REG_C], mread8(HL(cpu)));
-      set_hl(cpu, dec16(HL(cpu))); cpu->regs[REG_B] = dec8(cpu, cpu->regs[REG_B]);
-      if (cpu->regs[REG_B] != 0) {
-        setFlag(cpu, FLAG_PV, 1);
-        cpu->pc -= 2;
-        cpu->cycles += 21;
-      } else {
-        setFlag(cpu, FLAG_PV, 0);
-        cpu->cycles += 16;
-      }
-      break;
-    default:
-      printf("[BEMU80] Unknown MISC opcode: 0x%02x at 0x%04x\n", opcode, cpu->pc);
-      break;
-  }
-}
 
+      case 2: { /*z=2*/
+        if (q) {
+          /* ADC HL, rr*/
+          set_hl(cpu, adc16(cpu, HL(cpu), get_r16_1(cpu, p)));
+        } else {
+          /* SBC HL, rr*/
+          set_hl(cpu, sbc16(cpu, HL(cpu), get_r16_1(cpu, p)));
+        }
+        cpu->cycles += 15;
+        break;
+      }
 
-void bit_instruction(VirtZ80 *cpu) {
-  uint8_t opcode = fByte(cpu);
-  switch (opcode) {
-    case 0x00: // RLC reg
-    case 0x01:
-    case 0x02:
-    case 0x03:
-    case 0x04:
-    case 0x05:
-    case 0x07:
-      cpu->regs[(opcode & 0x07)] = rlc8(cpu, cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x06: // RLC (HL)
-      mwrite8(HL(cpu), rlc8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+      case 3: { /*z=3*/
+        uint16_t addr = fWord(cpu);
+        if (q) {
+          /* LD rr, (nn)*/
+          set_r16_1(cpu, p, mread16(addr));
+        } else {
+          /* LD (nn), rr*/
+          mwrite16(addr, get_r16_1(cpu, p));
+        }
+        cpu->cycles += 20;
+        break;
+      }
 
-    case 0x08: // RRC reg
-    case 0x09:
-    case 0x0A:
-    case 0x0B:
-    case 0x0C:
-    case 0x0D:
-    case 0x0F:
-      cpu->regs[((opcode-8) & 0x07)] = rrc8(cpu, cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x0E: // RRC (HL)
-      mwrite8(HL(cpu), rrc8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
-    
-    case 0x10: // RL reg
-    case 0x11:
-    case 0x12:
-    case 0x13:
-    case 0x14:
-    case 0x15:
-    case 0x17:
-      cpu->regs[(opcode & 0x07)] = rl8(cpu, cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x16: // RL (HL)
-      mwrite8(HL(cpu), rl8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+      case 4: { /*z=4*/
+        /* NEG*/
+        cpu->regs[REG_A] = sub8(cpu, 0, cpu->regs[REG_A]);
+        cpu->cycles += 8;
+        break;
+      }
 
-    case 0x18: // RR reg
-    case 0x19:
-    case 0x1A:
-    case 0x1B:
-    case 0x1C:
-    case 0x1D:
-    case 0x1F:
-      cpu->regs[((opcode-8) & 0x07)] = rr8(cpu, cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x1E: // RR (HL)
-      mwrite8(HL(cpu), rr8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+      case 5: { /*z=5*/
+        cpu->pc = pop(cpu);
+        if (y==1) {
+          /* RETI, maskable*/
+          /* special functionality here, eg. signals an io device*/
+        } else {
+          /* RETN, non-maskable*/
+          cpu->iff1 = cpu->iff2;
+        }
+        cpu->cycles += 14;
+        break;
+      }
 
-    case 0x20: // SLA reg
-    case 0x21:
-    case 0x22:
-    case 0x23:
-    case 0x24:
-    case 0x25:
-    case 0x27:
-      cpu->regs[(opcode & 0x07)] = sla8(cpu, cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x26: // SLA (HL)
-      mwrite8(HL(cpu), sla8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+      case 6: { /*z=6*/
+        /* IM y, interrupt mode*/
+        cpu->im = im_modes[y];
+        cpu->cycles += 8;
+        break;
+      }
 
-    case 0x28: // SRA reg
-    case 0x29:
-    case 0x2A:
-    case 0x2B:
-    case 0x2C:
-    case 0x2D:
-    case 0x2F:
-      cpu->regs[((opcode-8) & 0x07)] = sra8(cpu, cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x2E: // SRA (HL)
-      mwrite8(HL(cpu), sra8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+      case 7: { /*z=7*/
+        switch (y) {
+          case 0: { /* LD I, A*/
+            cpu->i = cpu->regs[REG_A];
+            cpu->cycles += 9;
+            break;
+          }
+          case 1: { /* LD R, A*/
+            cpu->r = cpu->regs[REG_A];
+            cpu->cycles += 9;
+            break;
+          }
+          case 2: { /* LD A, I*/
+            cpu->regs[REG_A] = cpu->i;
+            setFlag(cpu, FLAG_S, cpu->i & 0x80);
+            setFlag(cpu, FLAG_Z, cpu->i == 0);
+            setFlag(cpu, FLAG_N | FLAG_H, 0);
+            setFlag(cpu, FLAG_PV, cpu->iff2);
+            cpu->cycles += 9;
+            break;
+          }
+          case 3: { /* LD A, R*/
+            cpu->regs[REG_A] = cpu->r;
+            setFlag(cpu, FLAG_S, cpu->r & 0x80);
+            setFlag(cpu, FLAG_Z, cpu->r == 0);
+            setFlag(cpu, FLAG_N | FLAG_H, 0);
+            setFlag(cpu, FLAG_PV, cpu->iff2);
+            cpu->cycles += 9;
+            break;
+          }
+          case 4: { /* RRD*/
+            uint8_t temp1 = mread8(HL(cpu));
+            uint8_t temp_a = cpu->regs[REG_A];
+            cpu->regs[REG_A] = (temp_a & 0xF0) | (temp1 & 0x0F);
+            mwrite8(HL(cpu), (temp1 >> 4) | ((temp_a & 0x0F) << 4));
 
-    case 0x30: // SLL reg
-    case 0x31:
-    case 0x32:
-    case 0x33:
-    case 0x34:
-    case 0x35:
-    case 0x37:
-      cpu->regs[(opcode & 0x07)] = sll8(cpu, cpu->regs[(opcode & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x36: // SLL (HL)
-      mwrite8(HL(cpu), sll8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
+            uint8_t new_f = 0;
 
-    case 0x38: // SRL reg
-    case 0x39:
-    case 0x3A:
-    case 0x3B:
-    case 0x3C:
-    case 0x3D:
-    case 0x3F:
-      cpu->regs[((opcode-8) & 0x07)] = srl8(cpu, cpu->regs[((opcode-8) & 0x07)]);
-      cpu->cycles += 8;
-      break;
-    case 0x3E: // SRL (HL)
-      mwrite8(HL(cpu), srl8(cpu, mread8(HL(cpu))));
-      cpu->cycles += 15;
-      break;
-    default:
-      break;
-  }
-  if (opcode >= 0x40 && opcode <= 0x7F) { /* BIT */
-    uint8_t bit = (opcode >> 3) & 0x07;
-    uint8_t reg = opcode & 0x07;
-    
-    if (reg == 0x06) { /* (HL)*/
-      bit8(cpu, mread8(HL(cpu)), bit);
-      cpu->cycles += 12;
-    } else {
-      bit8(cpu, cpu->regs[reg], bit);
-      cpu->cycles += 8;
+            if (cpu->regs[REG_A] & 0x80) new_f |= FLAG_S;
+            if (cpu->regs[REG_A] == 0) new_f |= FLAG_Z;
+            if (__builtin_parity(cpu->regs[REG_A]) == 0) new_f |= FLAG_PV;
+
+            cpu->flags = (cpu->flags & ~(FLAG_S | FLAG_Z | FLAG_PV)) | new_f;
+            setFlag(cpu, FLAG_N | FLAG_H, 0);
+
+            update_flagsYX(cpu, cpu->regs[REG_A]);
+            cpu->cycles += 18;
+            break;
+          }
+          case 5: { /* RLD*/
+            uint8_t temp1 = mread8(HL(cpu));
+            uint8_t temp_a = cpu->regs[REG_A];
+            cpu->regs[REG_A] = (temp_a & 0xF0) | (temp1 >> 4);
+            mwrite8(HL(cpu), (temp1 << 4) | (temp_a & 0x0F));
+
+            uint8_t new_f = 0;
+
+            if (cpu->regs[REG_A] & 0x80) new_f |= FLAG_S;
+            if (cpu->regs[REG_A] == 0) new_f |= FLAG_Z;
+            if (__builtin_parity(cpu->regs[REG_A]) == 0) new_f |= FLAG_PV;
+
+            cpu->flags = (cpu->flags & ~(FLAG_S | FLAG_Z | FLAG_PV)) | new_f;
+            setFlag(cpu, FLAG_N | FLAG_H, 0);
+
+            update_flagsYX(cpu, cpu->regs[REG_A]);
+            cpu->cycles += 18;
+            break;
+          }
+          default: cpu->cycles += 8; break; /* NOP*/
+        }
+      }
     }
-  } else if (opcode >= 0x80 && opcode <= 0xBF) { /* RES*/
-    uint8_t bit = (opcode >> 3) & 0x07;
-    uint8_t reg = opcode & 0x07;
-    
-    if (reg == 0x06) { /* (HL)*/
-      mwrite8(HL(cpu),res8(cpu, mread8(HL(cpu)), bit));
-      cpu->cycles += 12;
-    } else {
-      cpu->regs[reg] = res8(cpu, cpu->regs[reg], bit);
-      cpu->cycles += 8;
-    }
-  } else if (opcode >= 0xC0 && opcode <= 0xFF) { /* SET*/
-    uint8_t bit = (opcode >> 3) & 0x07;
-    uint8_t reg = opcode & 0x07;
-    
-    if (reg == 0x06) { /* (HL)*/
-      mwrite8(HL(cpu),set8(cpu, mread8(HL(cpu)), bit));
-      cpu->cycles += 12;
-    } else {
-      cpu->regs[reg] = set8(cpu, cpu->regs[reg], bit);
-      cpu->cycles += 8;
+  } else if (x == 2) {
+    /* block instructions*/
+    if (z<=3 && y>=4) {
+      op_block_instruction(cpu, opcode);
     }
   }
 }
 
-void bit_instruction_index(VirtZ80 *cpu, uint16_t* index_reg) {
+void prefix_cb(VirtZ80 *cpu) {
+  /*Bit instructions*/
+  uint8_t opcode = fByte(cpu);
+  uint8_t x = opcode >> 6;
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t val = get_r8(cpu, z); /* initial value*/
+  uint8_t res; /* result*/
+
+  switch (x) {
+    case 0: { /*x=0*/
+      /* shift operations */
+      switch (y) {
+        case 0: res = rlc8(cpu, val); break; /* RCL*/
+        case 1: res = rrc8(cpu, val); break; /* RRC*/
+        case 2: res = rl8(cpu, val); break; /* RL*/
+        case 3: res = rl8(cpu, val); break; /* RR*/
+        case 4: res = sla8(cpu, val); break; /* SLA*/
+        case 5: res = sra8(cpu, val); break; /* SRA*/
+        case 6: res = sll8(cpu, val); break; /* SLL*/
+        case 7: res = srl8(cpu, val); break; /* SRL*/
+      }
+      break;
+    }
+
+    case 1: { /*x=1*/
+      /* bit operation*/
+      bit8(cpu, val, y);
+      return; /* no need to write back*/
+    }
+
+    case 2: { /*x=2*/
+      /* res operation*/
+      res = res8(cpu, val, y);
+      break;
+    }
+
+    case 3: { /*x=3*/
+      /* set operation*/
+      res = set8(cpu, val, y);
+      break;
+    }
+  }
+
+  set_r8(cpu, z, res);
+  cpu->cycles += (z == 6) ? 15 : 8;
+}
+
+void prefix_dd_fd(VirtZ80 *cpu, uint16_t *index_reg) {
+  uint8_t opcode = fByte(cpu);
+  uint8_t x = opcode >> 6;
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t p = y >> 1;
+  uint8_t q = y & 1;
+
+  switch (x) {
+    case 0: { /*x=0*/
+      switch (z) {
+        case 1: { /*z=1*/
+          if (q) {
+            /* q=1, ADD IX/IY, rr*/
+            *index_reg = add16(cpu, *index_reg, get_r16_index(cpu, p, index_reg));
+            cpu->cycles += 15;
+          } else if (!q && p==2){
+            /* q=0, only LD IX/IY, nn present*/
+            *index_reg = fWord(cpu);
+            cpu->cycles += 14;
+          }
+          break;
+        }
+
+        case 2: { /*z=2*/
+          if (!q && p==2) {
+            /* LD (nn), IX/IY*/
+            mwrite16(fWord(cpu), *index_reg);
+            cpu->cycles += 20;
+          } else if (q && p==2) {
+            /* LD IX/IY, (nn)*/
+            *index_reg = mread16(fWord(cpu));
+            cpu->cycles += 20;
+          }
+          break;
+        }
+
+        case 3: { /*z=3*/
+          if (q && p==2) {
+            /*q=1, DEC IX/IY only*/
+            *index_reg = dec16(*index_reg);
+          } else if (!q && p==2) {
+            /*q=0, INC IX/IY only*/
+            *index_reg = inc16(*index_reg);
+          }
+          cpu->cycles += 10;
+          break;
+        }
+
+        case 4: { /*z=4*/
+          /* INC r*/
+          if (y == 6) {
+            /* INC (IX/IY+d)*/
+            uint16_t addr = get_index_addr(cpu, *index_reg);
+            mwrite8(addr, inc8(cpu, mread8(addr)));
+          }
+          else set_r8_index(cpu, y, inc8(cpu, get_r8_index(cpu, y, index_reg)), index_reg);
+
+          cpu->cycles += (y == 6) ? 23 : 8;
+          break;
+        }
+
+        case 5: { /*z=5*/
+          /* DEC r*/
+          if (y == 6) {
+            /* DEC (IX/IY+d)*/
+            uint16_t addr = get_index_addr(cpu, *index_reg);
+            mwrite8(addr, dec8(cpu, mread8(addr)));
+          }
+          else set_r8_index(cpu, y, dec8(cpu, get_r8_index(cpu, y, index_reg)), index_reg);
+          cpu->cycles += (y == 6) ? 23 : 8;
+          break;
+        }
+
+        case 6: { /*z=6*/
+          /* LD r, n*/
+          if (y == 6) {
+            /* LD (IX/IY+d), n*/
+            uint16_t addr = get_index_addr(cpu, *index_reg);
+            mwrite8(addr, fByte(cpu));
+          }
+          else set_r8_index(cpu, y, fByte(cpu), index_reg);
+          cpu->cycles += (y == 6) ? 19 : 11;
+          break;
+        }
+      }
+      break;
+    }
+
+    case 1: { /*x=1*/
+      /* load group, replace H with IXH/IYH, L with IXL/IYL, (HL) with (IX/IY+d)*/
+      if (y == 6 && z == 6) {
+        /* NOP*/
+        cpu->cycles += 8; /* NOP*/
+      }
+      else if (y == 6) {
+        /* LD (IX/IY+d), r*/
+        uint16_t addr = get_index_addr(cpu, *index_reg);
+        mwrite8(addr, get_r8(cpu, z));
+        cpu->cycles += 19;
+      } else if (z == 6) {
+        /* LD r, (IX/IY+d)*/
+        uint16_t addr = get_index_addr(cpu, *index_reg);
+        set_r8(cpu, y, mread8(addr));
+        cpu->cycles += 19;
+      } else {
+        /* LD r, r*/
+        set_r8_index(cpu, y, get_r8_index(cpu, z, index_reg), index_reg);
+        cpu->cycles += (y == 6) ? 19 : 8;
+      }
+      break;
+    }
+
+    case 2: { /*x=2*/
+      /* ALU group*/
+      switch (y) {
+        case 0: cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 1: cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 2: cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 3: cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 4: cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 5: cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 6: cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+        case 7: cp8(cpu, cpu->regs[REG_A], get_r8_index(cpu, z, index_reg)); break;
+      }
+
+      cpu->cycles += (z == 6) ? 19 : 8;
+      break;
+    }
+
+    case 3: { /*x=3*/
+      switch (z) {
+        case 1: { /*z=1*/
+          if (!q && p == 2) {
+            /* only pops IX/IY*/
+            *index_reg = pop(cpu);
+            cpu->cycles += 14;
+          } else {
+            if (q && p == 2) {
+              /* JP (IX/IY)*/
+              cpu->pc = *index_reg;
+              cpu->cycles += 8;
+            } else if (q && p == 3) {
+              /* LD SP, IX/IY*/
+              cpu->sp = *index_reg;
+              cpu->cycles += 10;
+            }
+          }
+          break;
+        }
+
+        case 3: { /*z=3*/
+          if (y==1) {
+            prefix_cb_index(cpu, index_reg);
+          } else if (y==4) {
+            cpu->wz = *index_reg;
+            *index_reg = mread16(cpu->sp);
+            mwrite16(cpu->sp, cpu->wz);
+            cpu->cycles += 23;
+            break;
+          }
+          break;
+        }
+
+        case 5: { /*z=5*/
+          if (!q && p==2) {
+            /* PUSH IX/IY*/
+            push(cpu, *index_reg);
+            cpu->cycles += 15;
+          }
+        }
+      }
+    }
+  }
+
+}
+
+void prefix_cb_index(VirtZ80 *cpu, uint16_t *index_reg) {
+  /* Bit instructions*/
   uint16_t addr = get_index_addr(cpu, *index_reg);
   uint8_t opcode = fByte(cpu);
-  switch (opcode) {
-    case 0x00: // RLC reg
-    case 0x01:
-    case 0x02:
-    case 0x03:
-    case 0x04:
-    case 0x05:
-    case 0x07:
-      cpu->regs[(opcode & 0x07)] = rlc8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x06: // RLC (i+d)
-      mwrite8(addr, rlc8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
+  uint8_t x = opcode >> 6;
+  uint8_t y = (opcode >> 3) & 7;
+  uint8_t z = opcode & 7;
+  uint8_t val = mread8(addr);
+  uint8_t res;
 
-    case 0x08: // RRC reg
-    case 0x09:
-    case 0x0A:
-    case 0x0B:
-    case 0x0C:
-    case 0x0D:
-    case 0x0F:
-      cpu->regs[((opcode-8) & 0x07)] = rrc8(cpu, mread8(addr));
-      cpu->cycles += 23;
+  switch (x) {
+    case 0: { /*x=0*/
+      /* shift operations */
+      switch (y) {
+        case 0: res = rlc8(cpu, val); break; /* RCL*/
+        case 1: res = rrc8(cpu, val); break; /* RRC*/
+        case 2: res = rl8(cpu, val); break; /* RL*/
+        case 3: res = rl8(cpu, val); break; /* RR*/
+        case 4: res = sla8(cpu, val); break; /* SLA*/
+        case 5: res = sra8(cpu, val); break; /* SRA*/
+        case 6: res = sll8(cpu, val); break; /* SLL*/
+        case 7: res = srl8(cpu, val); break; /* SRL*/
+      }
       break;
-    case 0x0E: // RRC (i+d)
-      mwrite8(addr, rrc8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-    
-    case 0x10: // RL reg
-    case 0x11:
-    case 0x12:
-    case 0x13:
-    case 0x14:
-    case 0x15:
-    case 0x17:
-      cpu->regs[(opcode & 0x07)] = rl8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x16: // RL (i+d)
-      mwrite8(addr, rl8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
+    }
 
-    case 0x18: // RR reg
-    case 0x19:
-    case 0x1A:
-    case 0x1B:
-    case 0x1C:
-    case 0x1D:
-    case 0x1F:
-      cpu->regs[((opcode-8) & 0x07)] = rr8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x1E: // RR (i+d)
-      mwrite8(addr, rr8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-
-    case 0x20: // SLA reg
-    case 0x21:
-    case 0x22:
-    case 0x23:
-    case 0x24:
-    case 0x25:
-    case 0x27:
-      cpu->regs[(opcode & 0x07)] = sla8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x26: // SLA (i+d)
-      mwrite8(addr, sla8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-
-    case 0x28: // SRA reg
-    case 0x29:
-    case 0x2A:
-    case 0x2B:
-    case 0x2C:
-    case 0x2D:
-    case 0x2F:
-      cpu->regs[((opcode-8) & 0x07)] = sra8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x2E: // SRA (i+d)
-      mwrite8(addr, sra8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-
-    case 0x30: // SLL reg
-    case 0x31:
-    case 0x32:
-    case 0x33:
-    case 0x34:
-    case 0x35:
-    case 0x37:
-      cpu->regs[(opcode & 0x07)] = sll8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x36: // SLL (i+d)
-      mwrite8(addr, sll8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-
-    case 0x38: // SRL reg
-    case 0x39:
-    case 0x3A:
-    case 0x3B:
-    case 0x3C:
-    case 0x3D:
-    case 0x3F:
-      cpu->regs[((opcode-8) & 0x07)] = srl8(cpu, mread8(addr));
-      cpu->cycles += 23;
-      break;
-    case 0x3E: // SRL (i+d)
-      mwrite8(addr, srl8(cpu, mread8(addr)));
-      cpu->cycles += 23;
-      break;
-    default:
-      break;
-  }
-  if (opcode >= 0x40 && opcode <= 0x7F) { /* BIT */
-    uint8_t bit = (opcode >> 3) & 0x07;
-    
-    bit8(cpu, mread8(addr), bit);
-
-    cpu->cycles += 20;
-
-  } else if (opcode >= 0x80 && opcode <= 0xBF) { /* RES*/
-    uint8_t bit = (opcode >> 3) & 0x07;
-    
-    mwrite8(addr,res8(cpu, mread8(addr), bit));
-
-    cpu->cycles += 23;
-
-  } else if (opcode >= 0xC0 && opcode <= 0xFF) { /* SET*/
-    uint8_t bit = (opcode >> 3) & 0x07;
-
-    mwrite8(addr,set8(cpu, mread8(addr), bit));
-
-    cpu->cycles += 23;
-
-  }
-}
-
-
-void index_instruction(VirtZ80 *cpu, uint16_t* index_reg) { // Smart way to do this
-  uint8_t opcode = fByte(cpu);
-  switch (opcode) {
-    case 0x09: // ADD IX/IY, BC
-      *index_reg = add16(cpu, *index_reg, BC(cpu));
-      cpu->cycles += 15;
-      break;
-    case 0x19: // ADD IX/IY, DE
-      *index_reg = add16(cpu, *index_reg, DE(cpu));
-      cpu->cycles += 15;
-      break;
-    case 0x21: // LD IX/IY, nn
-      *index_reg = fWord(cpu);
-      cpu->cycles += 14;
-      break;
-    case 0x22: // LD (nn), IX/IY
-      mwrite16(fWord(cpu), *index_reg);
+    case 1: { /*x=1*/
+      /* bit operation*/
+      bit8(cpu, val, y);
       cpu->cycles += 20;
-      break;
-    case 0x23: // INC IX/IY
-      *index_reg += 1;
-      cpu->cycles += 10;
-      break;
-    case 0x24: /* INC IXH/IYH*/
-      set_high(index_reg, inc8(cpu, GET_HIGH(*index_reg)));
-      cpu->cycles += 8;
-      break;
-    case 0x25: /* DEC IXH/IYH*/
-      set_high(index_reg, dec8(cpu, GET_HIGH(*index_reg)));
-      cpu->cycles += 8;
-      break;
-    case 0x26: /* LD IXH/IYH, n*/
-      set_high(index_reg, fByte(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0x29: // ADD IX/IY, IX/IY
-      *index_reg = add16(cpu, *index_reg, *index_reg);
-      cpu->cycles += 15;
-      break;
-    case 0x2A: // LD IX/IY, (nn)
-      *index_reg = mread16(fWord(cpu));
-      cpu->cycles += 20;
-      break;
-    case 0x2B: // DEC IX/IY
-      *index_reg -= 1;
-      cpu->cycles += 10;
-      break;
-    case 0x2C: /* INC IXL/IXL*/
-      set_low(index_reg, inc8(cpu, GET_LOW(*index_reg)));
-      cpu->cycles += 8;
-      break;
-    case 0x2D: /* DEC IXL/IXL*/
-      set_low(index_reg, dec8(cpu, GET_LOW(*index_reg)));
-      cpu->cycles += 8;
-      break;
-    case 0x2E: /* LD IXL/IYL, n*/
-      set_low(index_reg, fByte(cpu));
-      cpu->cycles += 11;
-      break;
-    case 0x34: // INC (IX/IY+d)
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      mwrite8(cpu->wz, inc8(cpu, mread8(cpu->wz)));
-      cpu->cycles += 23;
-      break;
-    case 0x35: // DEC (IX/IY+d)
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      mwrite8(cpu->wz, dec8(cpu, mread8(cpu->wz)));
-      cpu->cycles += 23;
-      break;
-    case 0x36: // LD (IX/IY+d), n
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      mwrite8(cpu->wz, fByte(cpu));
-      cpu->cycles += 19;
-      break;
-    case 0x39: // ADD IX/IY, SP
-      *index_reg = add16(cpu, *index_reg, cpu->sp);
-      cpu->cycles += 15;
-      break;
-    case 0x44: /* LD B, IXH/IYH*/
-      cpu->regs[REG_B] = GET_HIGH(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x45: /* LD B, IXL/IYL*/
-      cpu->regs[REG_B] = GET_LOW(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x46: /* LD B, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_B] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x4C: /* LD C, IXH/IYH*/
-      cpu->regs[REG_C] = GET_HIGH(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x4D: /* LD C, IXL/IYL*/
-      cpu->regs[REG_C] = GET_LOW(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x4E: /* LD C, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_C] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x54: /* LD D, IXH/IYH*/
-      cpu->regs[REG_D] = GET_HIGH(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x55: /* LD D, IXL/IYL*/
-      cpu->regs[REG_D] = GET_LOW(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x56: /* LD D, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_D] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x5C: /* LD E, IXH/IYH*/
-      cpu->regs[REG_E] = GET_HIGH(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x5D: /* LD E, IXL/IYL*/
-      cpu->regs[REG_E] = GET_LOW(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x5E: /* LD E, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_E] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    /* LD IXH/IYH, reg*/
-    case 0x60:
-    case 0x61:
-    case 0x62:
-    case 0x63:
-      set_high(index_reg, cpu->regs[opcode & 0x07]);
-      cpu->cycles += 8;
-      break;
-    case 0x64: /* LD IXH/IYH, IXH/IYH*/
-      set_high(index_reg, GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x65: /* LD IXH/IYH, IXL/IYL*/
-      set_high(index_reg, GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x66: /* LD H, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_H] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x67: /* LD IXH/IYH, A*/
-      set_high(index_reg, cpu->regs[REG_A]);
-      cpu->cycles += 8;
-      break;
-    /* LD IXL/IYL, reg*/
-    case 0x68:
-    case 0x69:
-    case 0x6A:
-    case 0x6B:
-      set_low(index_reg, cpu->regs[(opcode-8) & 0x07]);
-      cpu->cycles += 8;
-      break;  
-    case 0x6C: /* LD IXL/IYL, IXH/IYH*/
-      set_low(index_reg, GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x6D: /* LD IXL/IYL, IXL/IYL*/
-      set_low(index_reg, GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x6E: /* LD L, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_L] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x6F: /* LD IXL/IYL, A*/
-      set_low(index_reg, cpu->regs[REG_A]);
-      cpu->cycles += 8;
-      break;
-    /* LD (IX/IY+d), reg*/
-    case 0x70:
-    case 0x71:
-    case 0x72:
-    case 0x73:
-    case 0x74:
-    case 0x75:
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      mwrite8(cpu->wz, cpu->regs[opcode & 0x07]);
-      cpu->cycles += 19;
-      break;
-    case 0x77: /* LD (IX/IY+d), A*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      mwrite8(cpu->wz, cpu->regs[REG_A]);
-      cpu->cycles += 19;
-      break;
-    case 0x7C: /* LD A, IXH/IYH*/
-      cpu->regs[REG_A] = GET_HIGH(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x7D: /* LD A, IXL/IYL*/
-      cpu->regs[REG_A] = GET_LOW(*index_reg);
-      cpu->cycles += 8;
-      break;
-    case 0x7E: /* LD A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = mread8(cpu->wz);
-      cpu->cycles += 19;
-      break;
-    case 0x84: /* ADD A, IXH/IYH*/
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x85: /* ADD A, IXL/IYL*/
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x86: /* ADD A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = add8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0x8C: /* ADC A, IXH/IYH*/
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x8D: /* ADC A, IXL/IYL*/
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x8E: /* ADC A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = adc8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0x94: /* SUB A, IXH/IYH*/
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x95: /* SUB A, IXL/IYL*/
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x96: /* SUB A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = sub8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0x9C: /* SBC A, IXH/IYH*/
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x9D: /* SBC A, IXL/IYL*/
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0x9E: /* SBC A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = sbc8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0xA4: /* AND A, IXH/IYH*/
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xA5: /* AND A, IXL/IYL*/
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xA6: /* AND A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = and8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0xAC: /* XOR A, IXH/IYH*/
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xAD: /* XOR A, IXL/IYL*/
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xAE: /* XOR A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = xor8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0xB4: /* OR A, IXH/IYH*/
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xB5: /* OR A, IXL/IYL*/
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xB6: /* OR A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cpu->regs[REG_A] = or8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0xBC: /* CP A, IXH/IYH*/
-      cp8(cpu, cpu->regs[REG_A], GET_HIGH(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xBD: /* CP A, IXL/IYL*/
-      cp8(cpu, cpu->regs[REG_A], GET_LOW(*index_reg));
-      cpu->cycles += 8;
-      break;
-    case 0xBE: /* CP A, (IX/IY+d)*/
-      cpu->wz = *index_reg + (int8_t)fByte(cpu);
-      cp8(cpu, cpu->regs[REG_A], mread8(cpu->wz));
-      cpu->cycles += 19;
-      break;
-    case 0xCB: /* Index bit instructions */
-      bit_instruction_index(cpu, index_reg);
-      break;
-    case 0xE1: // POP IX/IY
-      *index_reg = pop(cpu);
-      cpu->cycles += 14;
-      break;
-    case 0xE3: // EX (SP), IX/IY
-      cpu->wz = *index_reg;
-      *index_reg = mread16(cpu->sp);
-      mwrite16(cpu->sp, cpu->wz);
-      cpu->cycles += 23;
-      break;
-    case 0xE5: // PUSH IX/IY
-      push(cpu, *index_reg);
-      cpu->cycles += 15;
-      break;
-    case 0xE9: // JP (IX/IY)
-      cpu->pc = *index_reg;
-      cpu->cycles += 8;
-      break;
-    case 0xF9: // LD SP, IX/IY
-      cpu->sp = *index_reg;
-      cpu->cycles += 10;
-      break;
-    default:
-      printf("[BEMU80] Unknown index instruction: 0x%02x at 0x%04x\n", opcode, cpu->pc);
-      return;
+      return; /* no need to write back*/
+    }
+
+    case 2: { /*x=2*/
+      /* res operation*/
+      res = res8(cpu, val, y);
+      break;
+    }
+
+    case 3: { /*x=3*/
+      /* set operation*/
+      res = set8(cpu, val, y);
+      break;
+    }
+
+    mwrite8(addr, res);
+    if (z != 6) set_r8(cpu, z, res); /* undocumented register copy*/
+    cpu->cycles += 23;
   }
 }
 
@@ -2806,8 +1930,11 @@ void print_memory(VirtZ80 *cpu) {
 }
 
 int main(int argc, char **argv) {
+
+  printf("BEMU80 %s\n", (char*)VERSION_STR);
+
   if (argc < 2) {
-    printf("Usage: ./bemu80 <program>\n");
+    printf("Usage: %s <options>\nTo see the options, run %s -h\n", argv[0], argv[0]);
     return 1;
   }
 
@@ -2819,27 +1946,45 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--debug") == 0) {
       print_ins = true;
-    } else if (strcmp(argv[i], "--pc") == 0) {
-      start_pc = strtol(argv[i+1], NULL, 16);
+    } else if (strcmp(argv[i], "-pc") == 0) {
+      start_pc = strtol(argv[i+1], NULL, 0);
     } else if (strcmp(argv[i], "--romsize") == 0) {
-      rom_size = strtol(argv[i+1], NULL, 16);
+      rom_size = strtol(argv[i+1], NULL, 0);
     } else if (strcmp(argv[i], "--ramsize") == 0) {
-      ram_size = strtol(argv[i+1], NULL, 16);
+      ram_size = strtol(argv[i+1], NULL, 0);
     } else if (strcmp(argv[i], "--rom") == 0) {
       rom = fopen(argv[i+1], "rb");
       if (rom == NULL) {
         perror("fopen");
         exit(1);
       }
-    } else if (strcmp(argv[i], "--bp") == 0) {
-      breakpoint = strtol(argv[i+1], NULL, 16);
+    } else if (strcmp(argv[i], "-bp") == 0) {
+      breakpoint = strtol(argv[i+1], NULL, 0);
       enable_breakpoint = true;
-    } else if (strcmp(argv[i], "--fd") == 0) {
+    } else if (strcmp(argv[i], "-fd") == 0) {
       fdc_init(argv[i+1]);
     } else if (strcmp(argv[i], "--speed") == 0) { /* set target clockspeed*/
-      target_speed = strtol(argv[i+1], NULL, 10);
-    } else if (strcmp(argv[i], "--newformat") == 0) { /* use for newer programs that expects modern terminal format */
+      target_speed = strtol(argv[i+1], NULL, 0);
+    } else if (strcmp(argv[i], "--newformat") == 0) { /* use for newer programs that expect modern terminal format */
       old_format = false;
+    } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+      /*help messa*/
+      printf(
+        "Usage: %s <options>\n"
+        "Options:\n"
+        "--debug: Enable debug mode: prints the state after each instruction\n"
+        "-pc <pos>: Set initial program counter position\n"
+        "--romsize <size>: Size of ROM region\n"
+        "--ramsize <size>: Size of RAM region\n"
+        "--rom <file>: The ROM file to be loaded and executed\n"
+        "-bp <addr>: Breakpoint where the execution halts, debug only\n"
+        "-fd <file>: Floppy disk file for the FDC\n"
+        "--speed <speed>: Target clockspeed in Hz\n"
+        "--newformat: Use modern terminal format, may not work for older programs\n"
+        "--help: Print this message\n",
+        argv[0]
+      );
+      return 0;
     }
 
   }
@@ -2862,6 +2007,13 @@ int main(int argc, char **argv) {
   tcsetattr(STDIN_FILENO, TCSANOW, &newt);  /* Apply the new settings*/
 
   memset(&cpu, 0, sizeof(VirtZ80)); /* Initialize the CPU to 0*/
+
+  /* Allocate RAM*/
+  memory = calloc(MEM_SIZE, sizeof(uint8_t));
+  if (!memory) {
+    printf("Memory allocation failed\n");
+    return -1;
+  }
 
   fseek(rom, 0, SEEK_END); /* Get file size */
   long file_size = ftell(rom);
@@ -2902,6 +2054,8 @@ int main(int argc, char **argv) {
   pthread_cancel(input_thread_thread); /* Use pthread_kill(input_thread_thread, 0) if not working*/
   pthread_join(input_thread_thread, NULL);
   pthread_mutex_destroy(&acia_mutex);
+
+  free(memory);
 
   tcsetattr(STDIN_FILENO, TCSANOW, &oldt);  // Restore old settings
 
