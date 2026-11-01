@@ -66,7 +66,7 @@ Each file entry is represented by the following structure:
 
 ```C
 typedef struct {
-  uint8_t   used;       /* used flag*/
+  uint8_t   used;       /* is file slot used flag*/
   uint8_t   flags;      /* file flags, read/write*/
   uint8_t   id;         /* file id*/
   char      name[12];   /* file name*/
@@ -87,6 +87,17 @@ Each file block occupies 512 bytes. It contains the following information:
 - Next block, offset 0x01, size 2 bytes
 - Allignment padding, offset 0x03, size 1 byte
 - Data, offset 0x04, size 508 bytes
+
+This can be represented in C:
+
+```C
+typedef struct {
+  uint8_t   used;
+  uint16_t  next_block;
+  uint8_t   alling;
+  uint8_t   data[508];
+} block;
+```
 
 Linked block allocation
 -----------------------

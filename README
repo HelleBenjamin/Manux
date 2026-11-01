@@ -1,6 +1,6 @@
 Manux
 =====
-Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasksing, features ROM based kernel and disk based userland programs. It aims partial POSIX support.
+Manux is a small UNIX-like operating system for the Z80 cpu. It supports monotasking, features ROM based kernel and disk based userland programs. It aims partial POSIX support.
 
 Manux runs on a custom Z80 emulator called bemu80(https://github.com/HelleBenjamin/bemu80).
 The emulator is included in the repository and can be built using `make bemu80`.
@@ -8,7 +8,7 @@ The emulator is included in the repository and can be built using `make bemu80`.
 I'd recommend checking out the `doc/` folder for more information about the OS and its functions.
 
 Main features
-=============
+-------------
 - Monotasking
 - ROM based kernel
 - Disk based userland programs
@@ -17,18 +17,19 @@ Main features
 - File descriptor support
 
 Status
-======
+------
 The kernel is currently under development.
 Most of the features are working as intended, but there are still some bugs and missing features.
-Latest stable version: v0.3.0
+
+Latest stable version: **v0.3.0**
 
 History
-=======
+-------
 I started this project back in April 9th, 2025 after I figured out how to upload code as payload to a Z80 machine(http://searle.x10host.com/z80/SimpleZ80.html) that runs BASIC. That's why you see basicloader.c in older versions, fun fact or not. 
 Initially I released the repository as private, but I made a public repository on May 1st, marking the "first" release. After that, I continued development, and kept a small break(less than a year), and now I'm back working on it again.
 
 System calls
-============
+------------
 Programs can communicate with the kernel using system calls. The kernel preserves all general purpose registers, so the programmer shouldn't have to worry about them.
 
 Syscall calling convention
@@ -42,14 +43,14 @@ Syscall calling convention
 See `doc/syscalls.md` for more information
 
 POSIX support
-=============
+-------------
 Manux can run very simple POSIX programs. However, it's not fully POSIX-compliant, some programs might break or not work at all.
 Stdio works now: printf/scanf are tested. File operations aren't tested/implemented yet. Note that stdio add greatly to the code size, around 2-6KB depending on functions used.
 The current implementation relies on z88dk's newlib(also mixed with classic lib, little bit messy), so full custom target is needed. I haven't implemented the full target yet, but I've ported CRT0 and unistd/other POSIX-like functions.
 See `include/sys/` folder for currently supported functions.
 
 Minimum system requirements
-===========================
+---------------------------
 Manux supports bemu80(https://github.com/HelleBenjamin/bemu80) as the offical target machine. Manux is going to be ported to other machines in the future when the kernel becomes stable.
 Official x86(8086) port is planned.
 
@@ -60,32 +61,20 @@ These are the current system requirements:
 - a serial interface
 - floppy disk or other disk interface
 
-These requirements may change in the future. Lower ram requirement is planned.
-
-To do
-====
-- [] Add more drivers
-- [] Rework memory management
-- [] More POSIX features
-- [] More documentation
-- [x] A filesystem
-- [] Use only SDCC compiler, not the whole z88dk toolchain
-- [] Port Manux to other machines
-- [] Better configuration
-- [] Clean legacy code
+These requirements may change in the future.
 
 Programs
-========
+--------
 Manux can run POSIX-like with limited functionality. Some programs may not work as intended. 
 Currently stdio is not supported, so use read/write from unistd instead.
 
 Userland programs are located in `userland/` directory. See its README for more information.
 
 The OS comes with a few programs included in the `userland/` directory.
-There are `ecalc`(a simple calculator) and `asmz80`(a simple assembler, WIP).
+There are for example `ecalc`(simple calculator) and `m80asm`(simple assembler).
 
 Pre-requisites
-==============
+--------------
 - z88dk 2.4
 - make
 - kconfig-frontends-nox(for configuration)
@@ -93,7 +82,7 @@ Pre-requisites
 - git
 
 Building
-========
+--------
 Configure Manux using `kconfig-mconf Kconfig`. There's a preconfigured `.config` file included.
 To build Manux, run `make`. The kernel is build with z88dk. You need to have z88dk installed to build the kernel.
 
@@ -117,13 +106,14 @@ Reduce `--max-allocs-per-node100000` to 10000 if you want to build faster at the
 You can always run `make clean` to clean the build directory and remove all built stuff.
 
 Contributing
-============
+------------
 Pull requests are welcome! Feel free to add new features or fix bugs.
-Note that clearly vibe coded slop code isn't accepted.
-You can use AI if you understand it well enough, but I encourage you to write your own code(you learn that way).
+
+AI tools may be used only for debugging, helping understand code and reviewing.
+AI generated code isn't accepted, all code must be written by a human.
 
 License
-=======
+-------
 Copyright (C) 2025-2026 Benjamin Helle
 
 Manux is licensed under the GNU GPL v2. See `LICENSE` for details.

@@ -19,24 +19,23 @@ Memory map
 
 Memory is organized as follows:
 
-- 0x0000-0x1FFF: Kernel ROM
-
-- 0x2000-0x2FFF: Kernel workspace:
-- 0x2000-0x2106: Variables
-- 0x2106-0x21FF: TTY buffer, 250 bytes
-- 0x2200-0x23FF: FS_BUF, Scratch sector, 512 bytes
-- 0x2400-0x25FF: FS_ROOT_MADDR, 512 bytes
-- 0x2600-0x27FF: FS_BITMAP_ADDR, 512 bytes
-- 0x2800-0x29FF: FS_FENTRY_ADDR, 512 bytes
-- 0x2A00-0x2FFF: Kernel BSS
-
-- 0x3000-0x37FF: Kernel stack, 2048 bytes
-- 0x3800-0x47FF: Init/Shell program area, 4096 bytes
-- 0x4800-0x4BFF: Init/Shell stack, 1024 bytes
-- 0x4C00-0x4EFF: Unused
-
-- 0x4F00-0x4FFF: PIH area
-- 0x5000-0xFFFF: User program space, ~45KB
+| Address range | Name                    | Size       |
+|---------------|-------------------------|------------|
+| 0x0000-0x1FFF | Kernel ROM              | 8 KiB      |
+| 0x2000-0x2FFF | Kernel Workspace        | 4 KiB      |
+| 0x2000-0x2105 | Kernel Variables        | 262 bytes  |
+| 0x2106-0x21FF | TTY buffer              | 250 bytes  |
+| 0x2200-0x23FF | FS_BUF, scratch sector  | 512 bytes  |
+| 0x2400-0x25FF | FS_ROOT_MADDR           | 512 bytes  |
+| 0x2600-0x27FF | FS_BITMAP_ADDR          | 512 bytes  |
+| 0x2800-0x29FF | FS_FENTRY_ADDR          | 512 bytes  |
+| 0x2A00-0x2FFF | Kernel BSS              | 1536 bytes |
+| 0x3000-0x37FF | Kernel stack            | 2 KiB      |
+| 0x3800-0x47FF | Init/shell program area | 4 KiB      |
+| 0x4800-0x4BFF | Init/shell stack        | 1 KiB      |
+| 0x4C00-0x4EFF | Unused                  |            |
+| 0x4F00-0x4FFF | PIH area                | 255 bytes  |
+| 0x5000-0xFFFF | User program area       | 44 KiB     |
 
 Kernel+shell itself requires ~12KB of memory.
 
